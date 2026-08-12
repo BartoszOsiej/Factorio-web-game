@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { t } from '../lib/i18n';
-import { AuthService } from '../services/auth/AuthService';
+
 import { CoopLobbyService, type LobbyInfo } from '../services/coop/CoopLobbyService';
 
 interface Props {

@@ -55,6 +55,17 @@ export const RESOURCE_COLORS: Record<string, string> = {
   petroleum_gas: '#88ccff',
   light_oil: '#aaddaa',
   heavy_oil: '#886644',
+  solar_panel_item: '#2244aa',
+  accumulator_item: '#aa8800',
+  laser_turret_item: '#4444ff',
+  flak_cannon_item: '#884444',
+  tesla_coil_item: '#8844ff',
+  mine_item: '#aa4400',
+  roboport_item: '#2288aa',
+  silo_item: '#666688',
+  centrifuge_item: '#448844',
+  artillery_item: '#666644',
+  beacon_item: '#4444aa',
 };
 
 /** Kolory biomów używane przez renderer do wypełnienia tła chunka. */
@@ -88,6 +99,18 @@ export const BUILDING_COLORS: Record<string, string> = {
   refinery: '#182030',
   chemical_plant: '#18101e',
   pipe: '#1a1a1a',
+  solar_panel: '#1a2a50',
+  accumulator: '#3a3a10',
+  laser_turret: '#182048',
+  flak_cannon: '#282020',
+  tesla_coil: '#201040',
+  mine: '#3a2008',
+  roboport: '#183040',
+  pump: '#1a2030',
+  silo: '#2a2a30',
+  beacon: '#101830',
+  centrifuge: '#203020',
+  artillery: '#282018',
 };
 
 export const BUILDING_SIZES: Record<string, { w: number; h: number }> = {
@@ -111,6 +134,18 @@ export const BUILDING_SIZES: Record<string, { w: number; h: number }> = {
   refinery: { w: 3, h: 3 },
   chemical_plant: { w: 2, h: 2 },
   pipe: { w: 1, h: 1 },
+  solar_panel: { w: 2, h: 2 },
+  accumulator: { w: 2, h: 2 },
+  laser_turret: { w: 2, h: 2 },
+  flak_cannon: { w: 2, h: 2 },
+  tesla_coil: { w: 2, h: 2 },
+  mine: { w: 1, h: 1 },
+  roboport: { w: 3, h: 3 },
+  pump: { w: 2, h: 2 },
+  silo: { w: 4, h: 4 },
+  beacon: { w: 3, h: 3 },
+  centrifuge: { w: 3, h: 3 },
+  artillery: { w: 3, h: 3 },
 };
 
 export const BUILDING_HEALTH: Record<string, number> = {
@@ -134,6 +169,18 @@ export const BUILDING_HEALTH: Record<string, number> = {
   refinery: 300,
   chemical_plant: 200,
   pipe: 100,
+  solar_panel: 150,
+  accumulator: 200,
+  laser_turret: 500,
+  flak_cannon: 450,
+  tesla_coil: 600,
+  mine: 50,
+  roboport: 400,
+  pump: 150,
+  silo: 800,
+  beacon: 300,
+  centrifuge: 400,
+  artillery: 700,
 };
 
 export const RECIPES: Record<string, {
@@ -159,6 +206,17 @@ export const RECIPES: Record<string, {
   ammo: { id: 'ammo', name: 'Firearm Magazine', inputs: [{ itemId: 'iron_plate', count: 4 }], outputs: [{ itemId: 'ammo', count: 1 }], craftTime: 30, energyCost: 1, category: 'military' },
   wall_item: { id: 'wall_item', name: 'Wall', inputs: [{ itemId: 'stone', count: 5 }], outputs: [{ itemId: 'wall_item', count: 1 }], craftTime: 30, energyCost: 0.5, category: 'crafting' },
   turret_item: { id: 'turret_item', name: 'Gun Turret', inputs: [{ itemId: 'iron_plate', count: 5 }, { itemId: 'gear', count: 5 }, { itemId: 'copper_plate', count: 5 }], outputs: [{ itemId: 'turret_item', count: 1 }], craftTime: 180, energyCost: 2, category: 'military' },
+  solar_panel_item: { id: 'solar_panel_item', name: 'Solar Panel', inputs: [{ itemId: 'steel_plate', count: 3 }, { itemId: 'circuit', count: 5 }, { itemId: 'copper_plate', count: 4 }], outputs: [{ itemId: 'solar_panel_item', count: 1 }], craftTime: 120, energyCost: 1.5, category: 'energy' },
+  accumulator_item: { id: 'accumulator_item', name: 'Accumulator', inputs: [{ itemId: 'iron_plate', count: 4 }, { itemId: 'battery', count: 2 }], outputs: [{ itemId: 'accumulator_item', count: 1 }], craftTime: 90, energyCost: 1, category: 'energy' },
+  laser_turret_item: { id: 'laser_turret_item', name: 'Laser Turret', inputs: [{ itemId: 'steel_plate', count: 8 }, { itemId: 'advanced_circuit', count: 3 }, { itemId: 'battery', count: 2 }], outputs: [{ itemId: 'laser_turret_item', count: 1 }], craftTime: 240, energyCost: 3, category: 'military' },
+  flak_cannon_item: { id: 'flak_cannon_item', name: 'Flak Cannon', inputs: [{ itemId: 'steel_plate', count: 10 }, { itemId: 'gear', count: 8 }, { itemId: 'ammo', count: 5 }], outputs: [{ itemId: 'flak_cannon_item', count: 1 }], craftTime: 300, energyCost: 3, category: 'military' },
+  tesla_coil_item: { id: 'tesla_coil_item', name: 'Tesla Coil', inputs: [{ itemId: 'steel_plate', count: 6 }, { itemId: 'advanced_circuit', count: 5 }, { itemId: 'battery', count: 4 }], outputs: [{ itemId: 'tesla_coil_item', count: 1 }], craftTime: 360, energyCost: 4, category: 'military' },
+  mine_item: { id: 'mine_item', name: 'Land Mine', inputs: [{ itemId: 'iron_plate', count: 2 }, { itemId: 'ammo', count: 1 }], outputs: [{ itemId: 'mine_item', count: 2 }], craftTime: 30, energyCost: 0.5, category: 'military' },
+  roboport_item: { id: 'roboport_item', name: 'Roboport', inputs: [{ itemId: 'steel_plate', count: 10 }, { itemId: 'gear', count: 10 }, { itemId: 'advanced_circuit', count: 5 }], outputs: [{ itemId: 'roboport_item', count: 1 }], craftTime: 360, energyCost: 4, category: 'logistics' },
+  silo_item: { id: 'silo_item', name: 'Rocket Silo', inputs: [{ itemId: 'steel_plate', count: 20 }, { itemId: 'advanced_circuit', count: 10 }, { itemId: 'battery', count: 5 }], outputs: [{ itemId: 'silo_item', count: 1 }], craftTime: 600, energyCost: 5, category: 'production' },
+  centrifuge_item: { id: 'centrifuge_item', name: 'Centrifuge', inputs: [{ itemId: 'steel_plate', count: 10 }, { itemId: 'advanced_circuit', count: 5 }, { itemId: 'uranium', count: 2 }], outputs: [{ itemId: 'centrifuge_item', count: 1 }], craftTime: 360, energyCost: 4, category: 'production' },
+  artillery_item: { id: 'artillery_item', name: 'Artillery', inputs: [{ itemId: 'steel_plate', count: 15 }, { itemId: 'gear', count: 10 }, { itemId: 'advanced_circuit', count: 5 }, { itemId: 'ammo', count: 10 }], outputs: [{ itemId: 'artillery_item', count: 1 }], craftTime: 480, energyCost: 5, category: 'military' },
+  beacon_item: { id: 'beacon_item', name: 'Beacon', inputs: [{ itemId: 'steel_plate', count: 5 }, { itemId: 'advanced_circuit', count: 3 }], outputs: [{ itemId: 'beacon_item', count: 1 }], craftTime: 180, energyCost: 2, category: 'logistics' },
 };
 
 export const RESEARCH_TREE: Record<string, {
@@ -248,6 +306,17 @@ export const ITEM_NAMES: Record<string, string> = {
   gear: 'Gear', circuit: 'Circuit', ammo: 'Ammo',
   science_red: 'Red Sci', science_green: 'Green Sci', science_blue: 'Blue Sci',
   oil: 'Oil', uranium: 'Uranium',
+  solar_panel_item: 'Solar Panel', accumulator_item: 'Accumulator',
+  laser_turret_item: 'Laser Turret', flak_cannon_item: 'Flak Cannon',
+  tesla_coil_item: 'Tesla Coil', mine_item: 'Land Mine',
+  roboport_item: 'Roboport', silo_item: 'Rocket Silo',
+  centrifuge_item: 'Centrifuge', artillery_item: 'Artillery',
+  beacon_item: 'Beacon', advanced_circuit: 'Adv Circuit',
+  battery: 'Battery', plastic: 'Plastic', sulfuric_acid: 'Sulfuric Acid',
+  conveyor_belt: 'Conveyor', inserter_item: 'Inserter',
+  miner_item: 'Miner', furnace_item: 'Furnace',
+  wall_item: 'Wall', turret_item: 'Turret',
+  petroleum_gas: 'Petroleum', light_oil: 'Light Oil', heavy_oil: 'Heavy Oil',
 };
 
 export const ENEMY_STATS: Record<string, { health: number; attack: number; speed: number; range: number }> = {
@@ -256,4 +325,7 @@ export const ENEMY_STATS: Record<string, { health: number; attack: number; speed
   worm: { health: 100, attack: 20, speed: 0, range: 8 },
   behemoth: { health: 500, attack: 40, speed: 1.2, range: 1.5 },
   spawner: { health: 300, attack: 0, speed: 0, range: 0 },
+  destroyer: { health: 150, attack: 25, speed: 3.0, range: 4 },
+  leviathan: { health: 2000, attack: 80, speed: 0.8, range: 2 },
+  drone: { health: 40, attack: 15, speed: 4.0, range: 1.5 },
 };

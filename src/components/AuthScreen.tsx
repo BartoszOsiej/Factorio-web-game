@@ -28,8 +28,8 @@ export default function AuthScreen({ onAuth }: Props) {
 
     setLoading(false);
 
-    if (result.error) {
-      setError(result.error || 'Unknown error');
+    if (!result.ok) {
+      setError(result.error.message || 'Unknown error');
       return;
     }
 

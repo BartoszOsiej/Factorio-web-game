@@ -12,12 +12,12 @@ import {
 import { TutorialEngine } from '../core/systems/tutorial';
 import {
   playBuildSound, playMineSound, playCraftSound,
-  playEnemyHitSound, playEnemyDeathSound,
+  playEnemyDeathSound,
   playResearchSound, playLevelUpSound,
-  playAchievementSound, playUISound,
-  startAmbientHum, stopAmbientHum,
+  playAchievementSound,
+  startAmbientHum, stopAmbientHum, initAudio,
 } from './audio';
-import { initPostProc, applyPostProc, destroyPostProc } from './postproc';
+import { initPostProc, applyPostProc } from './postproc';
 
 /**
  * Główny silnik gry Novactorio.
@@ -173,6 +173,7 @@ export class GameEngine {
       },
       notifications: [],
       buildQueue: [],
+      totalPollutionGenerated: 0,
       worldSeed: Math.floor(Math.random() * 900000) + 100000,
       coopVisitors: new Map(),
     };
@@ -611,14 +612,12 @@ export class GameEngine {
   private handleMouseActions() {
     if (!this.hoveredTile) return;
     const { x, y } = this.hoveredTile;
-    let worldModified = false;
 
     if (this.mouse.down) {
       if (this.selectedBuilding) {
         if (!canAffordBuilding(this.state, this.selectedBuilding)) {
           this.addNotification('Not enough resources!', 'error');
         } else if (placeBuilding(this.state, this.selectedBuilding, x, y, this.selectedDirection)) {
-          worldModified = true;
           this.addNotification(`Placed ${this.selectedBuilding.replace(/_/g, ' ')}`, 'success');
           this.onBuildingAction?.('place', this.selectedBuilding, x, y, this.selectedDirection);
           playBuildSound();
@@ -629,7 +628,6 @@ export class GameEngine {
         if (dist <= this.state.player.reach) {
           if (this.miningCooldown <= 0 || this.lastMinedTile !== tileKey) {
             if (playerMine(this.state, x, y)) {
-              worldModified = true;
               this.miningCooldown = 8;
               this.lastMinedTile = tileKey;
               playMineSound();
@@ -662,7 +660,6 @@ export class GameEngine {
         }
         const removedType = building.type;
         if (removeBuilding(this.state, building.x, building.y)) {
-          worldModified = true;
           this.addNotification('Removed ' + removedType.replace(/_/g, ' '));
           this.onBuildingAction?.('remove', removedType, building.x, building.y, building.direction);
           this.state.buildQueue = this.state.buildQueue.filter(q => !(q.x === x && q.y === y));

@@ -239,7 +239,7 @@ export default function HUD({ state, notifications }: Props) {
       <div
         className="absolute top-14 right-4 w-44 h-44 rounded-xl overflow-hidden shadow-2xl"
         style={{
-          background: 'linear-gradient(180deg, #111820 0%, #0c1016 100%)',
+          background: 'linear-gradient(188deg, #111820 0%, #0c1016 100%)',
           border: '1px solid rgba(216,128,16,0.18)',
           borderTop: '1px solid rgba(216,128,16,0.35)',
           boxShadow: 'inset 0 1px 0 rgba(216,128,16,0.06), 0 0 0 1px rgba(0,0,0,0.6), 0 8px 24px rgba(0,0,0,0.7)',
@@ -249,6 +249,24 @@ export default function HUD({ state, notifications }: Props) {
         <div className="absolute top-1 left-2 text-[8px] font-orbitron text-white/20 tracking-widest z-10">{t('hudMap')}</div>
         <Minimap state={state} />
       </div>
+
+      {/* Weather indicator */}
+      {state.weather && state.weather !== 'clear' && (
+        <div
+          className="absolute top-40 right-4 rounded-lg px-2 py-1 text-[10px] font-orbitron tracking-wider"
+          style={{
+            background: 'rgba(0,0,0,0.5)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            color: state.weather === 'storm' ? '#ff6666' : state.weather === 'snow' ? '#aaddff' : state.weather === 'fog' ? '#aabbcc' : '#88aaff',
+          }}
+        >
+          {state.weather === 'rain' && '🌧 RAIN'}
+          {state.weather === 'heavy_rain' && '⛈ STORM'}
+          {state.weather === 'snow' && '❄ SNOW'}
+          {state.weather === 'fog' && '🌫 FOG'}
+          {state.weather === 'storm' && '⚡ STORM'}
+        </div>
+      )}
 
       {/* Controls hint — fades out after 30 s */}
       {hintsVisible && (
@@ -316,8 +334,19 @@ function Minimap({ state, size = 176 }: { state: GameState; size?: number }) {
               lab: '#a855f7', radar: '#06b6d4', turret: '#dc2626', wall: '#6b7280',
               storage: '#0ea5e9', refinery: '#c084fc', chemical_plant: '#34d399',
               pumpjack: '#a3e635',
+              solar_panel: '#2563eb', accumulator: '#eab308', laser_turret: '#6366f1',
+              flak_cannon: '#b91c1c', tesla_coil: '#8b5cf6', mine: '#ea580c',
+              roboport: '#0891b2', pump: '#0284c7', silo: '#6b7280',
+              beacon: '#818cf8', centrifuge: '#16a34a', artillery: '#71717a',
             };
             ctx.fillStyle = MINIMAP_BUILDING_COLORS[tile.building.type] || BUILDING_COLORS[tile.building.type] || '#888';
+            // Draw slightly larger for multi-tile buildings
+            const bSize = scale >= 2 ? scale + 1 : scale;
+            ctx.fillRect(mx, my, bSize, bSize);
+            // Building border for visibility
+            ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(mx, my, bSize, bSize);
           } else if (tile.resource) {
             ctx.fillStyle = RESOURCE_COLORS[tile.resource] || '#888';
           } else {
@@ -347,26 +376,52 @@ function Minimap({ state, size = 176 }: { state: GameState; size?: number }) {
     ctx.fill();
     ctx.shadowBlur = 0;
 
-    // Enemies
+    // Enemies — type-specific icons and sizes
+    const ENEMY_MINIMAP_COLORS: Record<string, string> = {
+      biter: '#ef4444', spitter: '#f97316', worm: '#dc2626',
+      behemoth: '#b91c1c', spawner: '#7f1d1d',
+      destroyer: '#6366f1', leviathan: '#9333ea', drone: '#facc15',
+    };
     for (const [, enemy] of state.enemies) {
       const ex = (enemy.x - px) * scale + cx;
       const ey = (enemy.y - py) * scale + cy;
       if (ex < 0 || ex > size || ey < 0 || ey > size) continue;
-      ctx.fillStyle = '#ef4444';
-      ctx.shadowColor = '#ef4444';
-      ctx.shadowBlur = 3;
-      ctx.fillRect(ex - 1, ey - 1, 3, 3);
+      const dotSize = enemy.type === 'behemoth' ? 4 : enemy.type === 'leviathan' ? 5 : enemy.type === 'spawner' ? 4 : 2;
+      ctx.fillStyle = ENEMY_MINIMAP_COLORS[enemy.type] || '#ef4444';
+      ctx.shadowColor = ctx.fillStyle;
+      ctx.shadowBlur = enemy.type === 'leviathan' ? 5 : 2;
+      if (enemy.type === 'destroyer' || enemy.type === 'drone') {
+        // Diamond shape for flying enemies
+        ctx.beginPath();
+        ctx.moveTo(ex, ey - dotSize);
+        ctx.lineTo(ex + dotSize, ey);
+        ctx.lineTo(ex, ey + dotSize);
+        ctx.lineTo(ex - dotSize, ey);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        ctx.fillRect(ex - dotSize / 2, ey - dotSize / 2, dotSize, dotSize);
+      }
       ctx.shadowBlur = 0;
     }
 
-    // NPCs
+    // NPCs — type-specific colors
+    const NPC_MINIMAP_COLORS: Record<string, string> = {
+      worker: '#22c55e', scout: '#06b6d4', trader: '#eab308',
+      guard: '#6b7280', settler: '#a3a3a3',
+    };
     for (const [, npc] of state.npcs) {
       const nx = (npc.x - px) * scale + cx;
       const ny = (npc.y - py) * scale + cy;
       if (nx < 0 || nx > size || ny < 0 || ny > size) continue;
-      ctx.fillStyle = '#22c55e';
+      ctx.fillStyle = NPC_MINIMAP_COLORS[npc.type] || '#22c55e';
       ctx.fillRect(nx - 1, ny - 1, 2, 2);
     }
+
+    // Border frame
+    ctx.strokeStyle = 'rgba(56,189,248,0.3)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, size, size);
   }, [state.tick, size]);
 
   return <canvas ref={canvasRef} width={size} height={size} className="w-full h-full" />;

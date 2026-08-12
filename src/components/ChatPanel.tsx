@@ -155,7 +155,6 @@ export default function ChatPanel({ onClose, onTradeFeeCreated }: Props) {
   };
 
   if (minimized) {
-    const unreadTrade = messages.filter(m => (m.channel ?? 'global') === 'trade').length;
     return (
       <div
         className="fixed z-25 cursor-pointer"

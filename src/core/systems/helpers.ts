@@ -13,9 +13,13 @@ export function getAcceptedItemTypes(buildingType: string): string[] | 'any' {
     case 'lab': return ['science_red', 'science_green', 'science_blue']
     case 'boiler': return ['coal']
     case 'turret': return ['ammo']
+    case 'flak_cannon': return ['ammo']
+    case 'artillery': return ['ammo']
+    case 'centrifuge': return ['uranium', 'iron', 'copper']
     case 'pumpjack': return []
     case 'refinery': return ['oil', 'light_oil', 'heavy_oil']
     case 'chemical_plant': return 'any'
+    case 'pump': return []
     default: return []
   }
 }

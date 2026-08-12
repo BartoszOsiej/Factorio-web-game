@@ -2,7 +2,6 @@ import glowFrag from '../shaders/glow.frag?raw';
 
 let gl: WebGLRenderingContext | null = null;
 let program: WebGLProgram | null = null;
-let framebuffer: WebGLFramebuffer | null = null;
 let texture: WebGLTexture | null = null;
 
 const vs = `
@@ -88,6 +87,5 @@ export function applyPostProc(sourceCanvas: HTMLCanvasElement, time: number) {
 export function destroyPostProc() {
   gl = null;
   program = null;
-  framebuffer = null;
   texture = null;
 }

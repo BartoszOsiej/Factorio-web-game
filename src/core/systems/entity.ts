@@ -433,7 +433,14 @@ export function spawnEnemies(state: GameState) {
     spawner.spawnTimer--
     if (spawner.spawnTimer <= 0) {
       spawner.spawnTimer = Math.max(60, spawner.spawnRate) * (state.evolution < 0.1 ? 2.5 : 1)
+      // Spawn different types based on evolution level
       const types: Enemy['type'][] = ['biter', 'spitter']
+      if (state.evolution > 0.3) types.push('biter', 'spitter') // more biters/spitters
+      if (state.evolution > 0.5) types.push('behemoth')
+      if (state.evolution > 0.7) types.push('destroyer')
+      if (state.evolution > 0.9) types.push('leviathan', 'drone')
+      // Occasional worm
+      if (Math.random() < 0.1) types.push('worm')
       const type = types[Math.floor(Math.random() * types.length)]
       const stats = ENEMY_STATS[type]
       const evo = state.evolution
@@ -479,46 +486,97 @@ export function updateEnemies(state: GameState) {
     const pdy = enemy.y - state.player.y
     let targetDistSq = pdx * pdx + pdy * pdy
 
+    // Type-specific behavior
+    const isFlying = enemy.type === 'destroyer' || enemy.type === 'drone'
+    const isLeviathan = enemy.type === 'leviathan'
+
+    // Drones swarm toward other drones
+    if (enemy.type === 'drone') {
+      for (const [, other] of state.enemies) {
+        if (other.id !== enemy.id && other.type === 'drone') {
+          const sdx = other.x - enemy.x
+          const sdy = other.y - enemy.y
+          const sdSq = sdx * sdx + sdy * sdy
+          if (sdSq > 4 && sdSq < 100) {
+            // Slight attraction to nearby drones
+            const sdist = Math.sqrt(sdSq)
+            enemy.x += (sdx / sdist) * 0.01
+            enemy.y += (sdy / sdist) * 0.01
+          }
+        }
+      }
+    }
+
     for (const [, building] of state.buildings) {
       const dx = enemy.x - building.x
       const dy = enemy.y - building.y
       const dSq = dx * dx + dy * dy
-      if (dSq < targetDistSq && dSq < 625) { // 25^2 = 625
+      if (dSq < targetDistSq && dSq < 625) {
         targetDistSq = dSq
         targetX = building.x
         targetY = building.y
       }
     }
 
-    if (targetDistSq > (enemy.range * 0.8) ** 2) {
+    const effectiveRange = isLeviathan ? enemy.range * 1.5 : enemy.range
+
+    if (targetDistSq > effectiveRange ** 2) {
       const dx = targetX - enemy.x
       const dy = targetY - enemy.y
       const dist = Math.sqrt(dx * dx + dy * dy)
       if (dist > 0.1) {
         const moveSpeed = enemy.speed * 0.04
-        enemy.x += (dx / dist) * moveSpeed
-        enemy.y += (dy / dist) * moveSpeed
+        if (isFlying) {
+          // Flyers move faster and more directly
+          enemy.x += (dx / dist) * moveSpeed * 1.3
+          enemy.y += (dy / dist) * moveSpeed * 1.3
+        } else {
+          enemy.x += (dx / dist) * moveSpeed
+          enemy.y += (dy / dist) * moveSpeed
+        }
         enemy.state = 'moving'
       }
     } else {
       enemy.state = 'attacking'
       if (enemy.attackCooldown <= 0) {
-        enemy.attackCooldown = 55
+        // Leviathan has longer cooldown but area damage
+        enemy.attackCooldown = isLeviathan ? 80 : 55
 
         const playerDistSq = (enemy.x - state.player.x) ** 2 + (enemy.y - state.player.y) ** 2
-        if (playerDistSq <= enemy.range * enemy.range) {
+        if (playerDistSq <= effectiveRange * effectiveRange) {
           state.player.health -= enemy.attack
           spawnParticle(state, state.player.x * TILE_SIZE, state.player.y * TILE_SIZE, 'spark', '#ff0000')
+          // Leviathan area damage
+          if (isLeviathan && playerDistSq < 4) {
+            state.player.health -= enemy.attack * 0.3
+          }
         }
 
         for (const [key, building] of state.buildings) {
           const dx = enemy.x - building.x
           const dy = enemy.y - building.y
           const dSq = dx * dx + dy * dy
-          const rangePlus = enemy.range + 0.5
+          const rangePlus = effectiveRange + 0.5
           if (dSq <= rangePlus * rangePlus) {
             building.health -= enemy.attack
             spawnParticle(state, building.x * TILE_SIZE, building.y * TILE_SIZE, 'spark', '#ff6600')
+            // Leviathan area damage
+            if (isLeviathan) {
+              for (const [bk, bv] of state.buildings) {
+                if (bk !== key) {
+                  const adx = enemy.x - bv.x
+                  const ady = enemy.y - bv.y
+                  const aSq = adx * adx + ady * ady
+                  if (aSq < 4) {
+                    bv.health -= enemy.attack * 0.2
+                    if (bv.health <= 0) {
+                      const [bbx, bby] = bk.split(',').map(Number)
+                      removeBuilding(state, bbx, bby)
+                    }
+                  }
+                }
+              }
+            }
             if (building.health <= 0) {
               const [bx, by] = key.split(',').map(Number)
               removeBuilding(state, bx, by)

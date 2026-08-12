@@ -238,7 +238,7 @@ export default function TradeHub({ onClose }: Props) {
   );
 }
 
-function BrowseView({ listings, currentUserId }: { listings: TradeListing[]; currentUserId: string }) {
+function BrowseView({ listings }: { listings: TradeListing[]; currentUserId: string }) {
   if (listings.length === 0) {
     return (
       <div className="text-center py-8">

@@ -25,7 +25,7 @@ interface Props {
 }
 
 export default function MobileControls({
-  engine, gameState, currentUser, onBuild, onCraft, onResearch, onStats, onSave, onCoop, onFriends, onAdmin, onGuide, onLogout,
+  engine, gameState, currentUser, onBuild, onCraft, onResearch, onStats, onSave, onCoop, onFriends, onAdmin, onGuide, onLogout, onPico8, onTradeHub,
 }: Props) {
   const joystickRef = useRef<HTMLDivElement>(null);
   const knobRef = useRef<HTMLDivElement>(null);

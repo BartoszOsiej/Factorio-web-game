@@ -126,3 +126,5 @@ export function Pico8Console({ onClose }: Props) {
     </div>
   );
 }
+
+export default Pico8Console;

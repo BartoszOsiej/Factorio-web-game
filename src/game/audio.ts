@@ -40,10 +40,6 @@ function noiseBuffer(ctx: AudioContext, duration: number): AudioBuffer {
   return buf
 }
 
-function tweenParam(param: AudioParam, value: number, duration: number, startTime?: number) {
-  const t = startTime ?? ctx!.currentTime
-  param.setTargetAtTime(value, t, duration * 0.3)
-}
 
 export function playMineSound() {
   const c = getCtx()

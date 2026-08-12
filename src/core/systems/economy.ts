@@ -23,6 +23,18 @@ const BUILDING_COSTS: Record<string, { itemId: string; count: number }[]> = {
   refinery:          [{ itemId: 'iron_plate', count: 40 }, { itemId: 'gear', count: 30 }, { itemId: 'circuit', count: 20 }, { itemId: 'steel_plate', count: 10 }],
   chemical_plant:    [{ itemId: 'iron_plate', count: 30 }, { itemId: 'gear', count: 20 }, { itemId: 'circuit', count: 15 }, { itemId: 'steel_plate', count: 8 }],
   pipe:              [{ itemId: 'iron_plate', count: 2 }],
+  solar_panel:       [{ itemId: 'steel_plate', count: 8 }, { itemId: 'circuit', count: 10 }, { itemId: 'copper_plate', count: 10 }],
+  accumulator:       [{ itemId: 'iron_plate', count: 10 }, { itemId: 'battery', count: 4 }],
+  laser_turret:      [{ itemId: 'steel_plate', count: 20 }, { itemId: 'advanced_circuit', count: 8 }, { itemId: 'battery', count: 5 }],
+  flak_cannon:       [{ itemId: 'steel_plate', count: 25 }, { itemId: 'gear', count: 20 }, { itemId: 'ammo', count: 10 }],
+  tesla_coil:        [{ itemId: 'steel_plate', count: 15 }, { itemId: 'advanced_circuit', count: 12 }, { itemId: 'battery', count: 8 }],
+  mine:              [{ itemId: 'iron_plate', count: 5 }, { itemId: 'ammo', count: 2 }],
+  roboport:          [{ itemId: 'steel_plate', count: 25 }, { itemId: 'gear', count: 25 }, { itemId: 'advanced_circuit', count: 12 }],
+  pump:              [{ itemId: 'iron_plate', count: 10 }, { itemId: 'gear', count: 5 }],
+  silo:              [{ itemId: 'steel_plate', count: 50 }, { itemId: 'advanced_circuit', count: 25 }, { itemId: 'battery', count: 12 }],
+  beacon:            [{ itemId: 'steel_plate', count: 12 }, { itemId: 'advanced_circuit', count: 8 }],
+  centrifuge:        [{ itemId: 'steel_plate', count: 25 }, { itemId: 'advanced_circuit', count: 12 }, { itemId: 'uranium', count: 5 }],
+  artillery:         [{ itemId: 'steel_plate', count: 40 }, { itemId: 'gear', count: 25 }, { itemId: 'advanced_circuit', count: 12 }, { itemId: 'ammo', count: 20 }],
 }
 
 const UPGRADE_COSTS: Record<number, { itemId: string; count: number }[]> = {

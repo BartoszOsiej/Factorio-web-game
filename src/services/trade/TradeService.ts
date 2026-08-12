@@ -181,7 +181,7 @@ export class TradeService {
 
   // Create fee request from chat agreement
   static async createFeeFromChat(
-    sellerId: string, sellerUsername: string,
+    sellerId: string, _sellerUsername: string,
     buyerId: string, buyerUsername: string,
     pricePln: number, itemName: string, quantity: number,
     chatProof: string,

@@ -1,0 +1,7 @@
+feat: coop UI, trade hub, achievements, mobile controls and renderer improvements
+
+- CoopMenu, ChatPanel, TradeHub UX updates
+- Achievements, economy, production, tutorial system tweaks
+- Mobile controls + HUD polish
+- Renderer overhaul (1.5k lines reworked)
+- Build verified (vite build passes)

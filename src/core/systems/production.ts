@@ -227,6 +227,120 @@ function updateTurret(state: GameState, building: Building) {
   }
 }
 
+function updateLaserTurret(state: GameState, building: Building) {
+  const range = 14
+  let nearestEnemy: Enemy | null = null
+  let nearestDistSq = Infinity
+
+  for (const [, enemy] of state.enemies) {
+    const dx = enemy.x - building.x
+    const dy = enemy.y - building.y
+    const distSq = dx * dx + dy * dy
+    if (distSq < range * range && distSq < nearestDistSq) {
+      nearestDistSq = distSq
+      nearestEnemy = enemy
+    }
+  }
+
+  if (nearestEnemy && building.energy > 5) {
+    building.energy -= 2
+    const damage = 25
+    nearestEnemy.health -= damage
+    spawnParticle(state, nearestEnemy.x * TILE_SIZE, nearestEnemy.y * TILE_SIZE, 'spark', '#00ffff')
+    spawnParticle(state, building.x * TILE_SIZE + 16, building.y * TILE_SIZE + 4, 'spark', '#88ffff')
+
+    if (nearestEnemy.health <= 0) {
+      state.enemies.delete(nearestEnemy.id)
+      state.statistics.enemiesKilled++
+      grantXPToPlayer(state, 12)
+      spawnParticle(state, nearestEnemy.x * TILE_SIZE, nearestEnemy.y * TILE_SIZE, 'explosion', '#00ffff')
+    }
+    building.isActive = true
+  } else {
+    building.isActive = false
+  }
+}
+
+function updateFlakCannon(state: GameState, building: Building) {
+  const range = 10
+  let nearestEnemy: Enemy | null = null
+  let nearestDistSq = Infinity
+
+  // Flak prioritizes flying enemies
+  for (const [, enemy] of state.enemies) {
+    if (enemy.type !== 'destroyer' && enemy.type !== 'drone') continue
+    const dx = enemy.x - building.x
+    const dy = enemy.y - building.y
+    const distSq = dx * dx + dy * dy
+    if (distSq < range * range && distSq < nearestDistSq) {
+      nearestDistSq = distSq
+      nearestEnemy = enemy
+    }
+  }
+
+  // Fall back to any enemy if no flyers
+  if (!nearestEnemy) {
+    for (const [, enemy] of state.enemies) {
+      const dx = enemy.x - building.x
+      const dy = enemy.y - building.y
+      const distSq = dx * dx + dy * dy
+      if (distSq < range * range && distSq < nearestDistSq) {
+        nearestDistSq = distSq
+        nearestEnemy = enemy
+      }
+    }
+  }
+
+  if (nearestEnemy && building.energy > 3) {
+    building.energy -= 1
+    const damage = 20
+    nearestEnemy.health -= damage
+    spawnParticle(state, nearestEnemy.x * TILE_SIZE, nearestEnemy.y * TILE_SIZE, 'explosion', '#ff4444')
+    spawnParticle(state, building.x * TILE_SIZE + 16, building.y * TILE_SIZE + 4, 'spark', '#ff8800')
+
+    if (nearestEnemy.health <= 0) {
+      state.enemies.delete(nearestEnemy.id)
+      state.statistics.enemiesKilled++
+      grantXPToPlayer(state, 10)
+      spawnParticle(state, nearestEnemy.x * TILE_SIZE, nearestEnemy.y * TILE_SIZE, 'explosion', '#ff6600')
+    }
+    building.isActive = true
+  } else {
+    building.isActive = false
+  }
+}
+
+function updateMine(state: GameState, building: Building) {
+  if (!building.isActive) return
+  const triggerRange = 2
+
+  for (const [, enemy] of state.enemies) {
+    const dx = enemy.x - building.x
+    const dy = enemy.y - building.y
+    const dSq = dx * dx + dy * dy
+    if (dSq <= triggerRange * triggerRange) {
+      // Explode — damage all nearby enemies
+      const explosionRange = 6
+      for (const [, e] of state.enemies) {
+        const edx = e.x - building.x
+        const edy = e.y - building.y
+        if (edx * edx + edy * edy <= explosionRange * explosionRange) {
+          e.health -= 80
+          if (e.health <= 0) {
+            state.enemies.delete(e.id)
+            state.statistics.enemiesKilled++
+            grantXPToPlayer(state, 8)
+          }
+        }
+      }
+      spawnParticle(state, building.x * TILE_SIZE + 16, building.y * TILE_SIZE + 16, 'explosion', '#ff4400')
+      const [mx, my] = [building.x, building.y]
+      removeBuilding(state, mx, my)
+      break
+    }
+  }
+}
+
 function updatePumpjack(state: GameState, building: Building) {
   let foundOil = false
   for (let dy = 0; dy < 2; dy++) {
@@ -423,6 +537,9 @@ export function updateProduction(state: GameState) {
       case 'lab': updateLab(state, building); break
       case 'radar': updateRadar(state, building); break
       case 'turret': updateTurret(state, building); break
+      case 'laser_turret': updateLaserTurret(state, building); break
+      case 'flak_cannon': updateFlakCannon(state, building); break
+      case 'mine': updateMine(state, building); break
       case 'pumpjack': updatePumpjack(state, building); break
       case 'refinery': updateRefinery(state, building); break
       case 'chemical_plant': updateChemicalPlant(state, building); break

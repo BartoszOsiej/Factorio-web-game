@@ -1,11 +1,13 @@
 /** Typ surowca dostępnego na mapie. */
 export type ResourceType = 'iron' | 'copper' | 'coal' | 'stone' | 'wood' | 'oil' | 'water' | 'uranium';
 /** Typ budynku — wszystkie konstrukcje stawiane przez gracza/NPC. */
-export type BuildingType = 'miner' | 'furnace' | 'assembler' | 'conveyor' | 'inserter' | 'storage' | 'power_pole' | 'steam_engine' | 'boiler' | 'lab' | 'radar' | 'turret' | 'wall' | 'belt_junction' | 'splitter' | 'underground_belt' | 'pumpjack' | 'refinery' | 'chemical_plant' | 'pipe';
+export type BuildingType = 'miner' | 'furnace' | 'assembler' | 'conveyor' | 'inserter' | 'storage' | 'power_pole' | 'steam_engine' | 'boiler' | 'lab' | 'radar' | 'turret' | 'wall' | 'belt_junction' | 'splitter' | 'underground_belt' | 'pumpjack' | 'refinery' | 'chemical_plant' | 'pipe'
+  | 'solar_panel' | 'accumulator' | 'laser_turret' | 'flak_cannon' | 'tesla_coil'
+  | 'mine' | 'roboport' | 'pump' | 'silo' | 'beacon' | 'centrifuge' | 'artillery';
 /** Typ NPC — worker (buduje), scout (eksploruje), trader (handluje), guard (chroni), settler (osadnik). */
 export type NPCType = 'worker' | 'scout' | 'trader' | 'guard' | 'settler';
-/** Typ wroga — biter (podstawowy), spitter (strzela), worm (wieża), behemoth (ciężki), spawner (gniazdo). */
-export type EnemyType = 'biter' | 'spitter' | 'worm' | 'behemoth' | 'spawner';
+/** Typ wroga — biter (podstawowy), spitter (strzela), worm (wieża), behemoth (ciężki), spawner (gniazdo), destroyer (latający), leviathan (olbrzym), drone (szybki). */
+export type EnemyType = 'biter' | 'spitter' | 'worm' | 'behemoth' | 'spawner' | 'destroyer' | 'leviathan' | 'drone';
 /** Typ biomu — wpływa na kolorystykę i generację surowców. */
 export type BiomeType = 'grass' | 'desert' | 'snow' | 'forest' | 'swamp' | 'volcanic';
 /** Kierunek — używany przez gracza, budynki, przenośniki i insertery. */
@@ -226,7 +228,7 @@ export interface GameState {
   powerGrid: Map<string, { production: number; consumption: number; stored: number }>;
   dayTime: number;
   dayLength: number;
-  weather: 'clear' | 'rain' | 'storm' | 'fog';
+  weather: 'clear' | 'rain' | 'heavy_rain' | 'storm' | 'fog' | 'snow';
   weatherTimer: number;
   statistics: {
     itemsProduced: Record<string, number>;

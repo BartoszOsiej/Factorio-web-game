@@ -33,14 +33,8 @@ export interface TutorialStep {
   autoProgress?: boolean
 }
 
-type StepBuilder = {
-  msg: (m: string) => { detail: (d: string) => { highlight: (h: string) => { waitFor: (c: TutorialCondition) => TutorialStep } } }
-}
-
-const S: StepBuilder = {} as any
 
 function step(id: TutorialStepId) {
-  let m = '', d = '', h = ''
   return {
     msg: (message: string) => ({
       detail: (detail: string) => ({

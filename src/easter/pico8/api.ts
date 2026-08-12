@@ -14,7 +14,7 @@ export class PicoAPI {
   private palette: string[];
   private buttons: Set<number> = new Set();
   private prevButtons: Set<number> = new Set();
-  private _sfxQueue: Array<{ note: number; dur: number }> = [];
+
   private audioCtx: AudioContext | null = null;
 
   constructor(private canvas: HTMLCanvasElement) {

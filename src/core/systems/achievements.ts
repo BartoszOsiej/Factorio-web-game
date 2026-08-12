@@ -61,7 +61,6 @@ export function checkAchievements(state: GameState) {
         msg += ` +${def.reward.gems}💎`
       }
       if (def.reward.xp) {
-        const prevLevel = state.player.level
         state.player.xp += def.reward.xp
         while (state.player.xp >= state.player.level * 500) {
           state.player.xp -= state.player.level * 500

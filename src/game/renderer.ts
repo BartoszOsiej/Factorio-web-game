@@ -1,7 +1,13 @@
 import { GameState, Tile, Building, NPC, Enemy, Direction } from './types';
 import { CHUNK_SIZE, TILE_SIZE, BUILDING_SIZES, BUILDING_COLORS, RESOURCE_COLORS, MAX_PARTICLES } from './constants';
 import { hasTreeAt, getYieldColor } from './world';
-import { DIR_OFFSETS, lightenColorUtil, lightenColor, darkenColor } from '../render/utils';
+import { DIR_OFFSETS } from '../render/utils';
+import { initSprites, getTerrainSprite, getWaterSprite, getTreeSprite, getBuildingSprite, getEnemySprite, getNPCSprite, getPlayerSprite, getItemIcon } from '../render/SpriteManager';
+import { WeatherSystem, WeatherScheduler, WeatherType } from '../render/WeatherSystem';
+import { ParticleEffectsSystem } from '../render/ParticleEffects';
+import { AmbientAtmosphere } from '../render/AmbientAtmosphere';
+import { ScreenEffects } from '../render/ScreenEffects';
+import { PollutionOverlay } from '../render/PollutionOverlay';
 
 /**
  * Renderer Canvas 2D — rysuje świat gry (chunki, budynki, NPC, wrogowie,
@@ -25,12 +31,49 @@ export class GameRenderer {
   ghostDirection = 'right';
   /** Czy gracza stać na postawienie ghost building (kolor: zielony/czerwony). */
   ghostCanAfford = true;
-  private enemyHitFlash = new Map<string, number>(); // enemyId -> flashFrames remaining
+
+  // Pre-allocated render buffers — NO per-frame allocations
+  private _sortedBuildings: Building[] = [];
+  private _entityBuf: { y: number; render: () => void }[] = [];
+  private _entityCount = 0;
+  // Cached sky gradient to avoid recreation
+  private _lastSkyDayFactor = -1;
+  private _skyCanvas: HTMLCanvasElement | null = null;
+  private _skyCtx: CanvasRenderingContext2D | null = null;
+  private enemyHitFlash = new Map<string, number>();
   private damageNumbers: { x: number; y: number; value: number; life: number; color: string }[] = [];
   private prevEnemyHealth = new Map<string, number>();
+  private _prevEnemyHealthIds: string[] = [];
   private sunShadowDX = 4;
   private sunShadowDY = 4;
   private sunShadowAlpha = 0.25;
+  // Pre-computed enemy color cache: key = `${type}_${evolutionBucket}` → 'rgb(...)' string
+  private static readonly _ENEMY_COLOR_CACHE = new Map<string, string>();
+  private static _getEnemyDarkColor(type: string, evolution: number): string {
+    const bucket = (evolution * 10 | 0) / 10; // quantize to 0.1
+    const key = type + '_' + bucket;
+    let c = GameRenderer._ENEMY_COLOR_CACHE.get(key);
+    if (c !== undefined) return c;
+    const r = 60 + bucket * 10 * 120;
+    const g = 15 + bucket * 10 * 25;
+    const b = 15 + bucket * 10 * 15;
+    c = `rgb(${r * 0.6 | 0},${g * 0.6 | 0},${b * 0.6 | 0})`;
+    GameRenderer._ENEMY_COLOR_CACHE.set(key, c);
+    return c;
+  }
+
+  /** Weather system — rain, snow, fog, storm. */
+  weatherSystem = new WeatherSystem();
+  /** Weather scheduler for auto-cycling. */
+  weatherScheduler = new WeatherScheduler();
+  /** Particle effects — explosions, sparks, smoke, damage numbers. */
+  particleEffects = new ParticleEffectsSystem();
+  /** Ambient atmosphere — fireflies, dust, pollution haze, leaves. */
+  ambientAtmosphere = new AmbientAtmosphere();
+  /** Screen effects — shake, shockwaves, damage flash. */
+  screenEffects = new ScreenEffects();
+  /** Pollution overlay — visible brown haze on ground. */
+  pollutionOverlay = new PollutionOverlay();
 
   /** Inicjalizuje renderer: zapisuje referencję do canvas, context 2D i tworzy offscreen lightCanvas. */
   constructor(canvas: HTMLCanvasElement) {
@@ -38,6 +81,7 @@ export class GameRenderer {
     this.ctx = canvas.getContext('2d', { alpha: false })!;
     this.lightCanvas = document.createElement('canvas');
     this.lightCtx = this.lightCanvas.getContext('2d')!;
+    initSprites();
   }
 
   /** Główna metoda renderowania: czyści ekran, rysuje chunki, budynki, NPC, wrogów, cząsteczki, ghost building, fog i efekty świetlne. */
@@ -45,6 +89,27 @@ export class GameRenderer {
     this.frameCount++;
     const { ctx, canvas } = this;
     const { camera } = state;
+
+    // Periodic map cleanup every 500 frames to prevent memory leaks
+    if (this.frameCount % 500 === 0) {
+      if (this.enemyHitFlash.size > 500) {
+        for (const [k, v] of this.enemyHitFlash) { if (v <= 0) this.enemyHitFlash.delete(k); }
+      }
+      if (this.prevEnemyHealth.size > 500) {
+        // Remove entries for enemies that no longer exist
+        for (const [k] of this.prevEnemyHealth) {
+          if (!state.enemies.has(k)) this.prevEnemyHealth.delete(k);
+        }
+      }
+    }
+
+    // Update screen effects
+    this.screenEffects.update();
+
+    // Apply screen shake
+    ctx.save();
+    ctx.translate(this.screenEffects.shakeX, this.screenEffects.shakeY);
+
     const dayPhase = state.dayTime / state.dayLength;
     const dayFactor = Math.max(0.25, Math.sin(dayPhase * Math.PI * 2) * 0.5 + 0.5);
     const isNight = dayFactor < 0.5;
@@ -60,26 +125,35 @@ export class GameRenderer {
       this.sunShadowAlpha = isNight ? 0 : Math.max(0, Math.min(0.38, (dayFactor - 0.33) * 0.55));
     }
 
-    // Sky — atmospheric industrial backdrop
-    const skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    const isDawnDusk = dayFactor > 0.38 && dayFactor < 0.62;
-    if (isDawnDusk) {
-      // Dawn / dusk: warm amber horizon glow
-      const t = 1 - Math.abs(dayFactor - 0.5) / 0.12;
-      skyGrad.addColorStop(0, `rgb(${Math.floor(8 + dayFactor * 12)},${Math.floor(8 + dayFactor * 12)},${Math.floor(18 + dayFactor * 20)})`);
-      skyGrad.addColorStop(0.6, `rgb(${Math.floor(30 + t * 80)},${Math.floor(15 + t * 35)},${Math.floor(5 + t * 10)})`);
-      skyGrad.addColorStop(1, `rgb(${Math.floor(20 + t * 60)},${Math.floor(10 + t * 25)},${Math.floor(3 + t * 8)})`);
-    } else if (dayFactor < 0.4) {
-      // Night
-      skyGrad.addColorStop(0, 'rgb(3,4,10)');
-      skyGrad.addColorStop(1, 'rgb(6,6,14)');
-    } else {
-      // Day
-      skyGrad.addColorStop(0, `rgb(${Math.floor(10 + dayFactor * 65)},${Math.floor(20 + dayFactor * 85)},${Math.floor(50 + dayFactor * 110)})`);
-      skyGrad.addColorStop(1, `rgb(${Math.floor(14 + dayFactor * 70)},${Math.floor(25 + dayFactor * 90)},${Math.floor(55 + dayFactor * 105)})`);
+    // Sky — cached to offscreen canvas, only rebuild when dayFactor changes
+    const dayFactorRounded = Math.round(dayFactor * 20) / 20; // quantize to 5% steps
+    if (dayFactorRounded !== this._lastSkyDayFactor || !this._skyCanvas) {
+      if (!this._skyCanvas) {
+        this._skyCanvas = document.createElement('canvas');
+        this._skyCtx = this._skyCanvas.getContext('2d')!;
+      }
+      this._skyCanvas.width = canvas.width;
+      this._skyCanvas.height = canvas.height;
+      const sc = this._skyCtx!;
+      const skyGrad = sc.createLinearGradient(0, 0, 0, canvas.height);
+      const isDawnDusk = dayFactorRounded > 0.38 && dayFactorRounded < 0.62;
+      if (isDawnDusk) {
+        const t = 1 - Math.abs(dayFactorRounded - 0.5) / 0.12;
+        skyGrad.addColorStop(0, `rgb(${Math.floor(8 + dayFactorRounded * 12)},${Math.floor(8 + dayFactorRounded * 12)},${Math.floor(18 + dayFactorRounded * 20)})`);
+        skyGrad.addColorStop(0.6, `rgb(${Math.floor(30 + t * 80)},${Math.floor(15 + t * 35)},${Math.floor(5 + t * 10)})`);
+        skyGrad.addColorStop(1, `rgb(${Math.floor(20 + t * 60)},${Math.floor(10 + t * 25)},${Math.floor(3 + t * 8)})`);
+      } else if (dayFactorRounded < 0.4) {
+        skyGrad.addColorStop(0, 'rgb(3,4,10)');
+        skyGrad.addColorStop(1, 'rgb(6,6,14)');
+      } else {
+        skyGrad.addColorStop(0, `rgb(${Math.floor(10 + dayFactorRounded * 65)},${Math.floor(20 + dayFactorRounded * 85)},${Math.floor(50 + dayFactorRounded * 110)})`);
+        skyGrad.addColorStop(1, `rgb(${Math.floor(14 + dayFactorRounded * 70)},${Math.floor(25 + dayFactorRounded * 90)},${Math.floor(55 + dayFactorRounded * 105)})`);
+      }
+      sc.fillStyle = skyGrad;
+      sc.fillRect(0, 0, this._skyCanvas.width, this._skyCanvas.height);
+      this._lastSkyDayFactor = dayFactorRounded;
     }
-    ctx.fillStyle = skyGrad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(this._skyCanvas, 0, 0);
 
     // Stars at night (fewer stars = faster)
     if (dayFactor < 0.45) {
@@ -110,7 +184,10 @@ export class GameRenderer {
     const endCX = Math.floor(viewRight / TILE_SIZE / CHUNK_SIZE) + 1;
     const endCY = Math.floor(viewBottom / TILE_SIZE / CHUNK_SIZE) + 1;
 
-    // Render ground layer
+    // Render ground layer — pre-compute night tint color once
+    const nightAmount = dayFactor < 0.95 ? Math.max(0.25, 1 - dayFactor) : 0;
+    const nightTintAlpha = nightAmount * 0.55;
+    const nightTint = nightTintAlpha > 0.01 ? `rgba(5,3,12,${nightTintAlpha.toFixed(3)})` : null;
     for (let cy = startCY; cy <= endCY; cy++) {
       for (let cx = startCX; cx <= endCX; cx++) {
         const key = `${cx},${cy}`;
@@ -122,7 +199,7 @@ export class GameRenderer {
             const sx = tile.x * TILE_SIZE;
             const sy = tile.y * TILE_SIZE;
             if (sx + TILE_SIZE < viewLeft || sx > viewRight || sy + TILE_SIZE < viewTop || sy > viewBottom) continue;
-            this.renderTile(ctx, tile, dayFactor, state);
+            this.renderTile(ctx, tile, nightTint, state);
           }
         }
       }
@@ -131,44 +208,75 @@ export class GameRenderer {
     // Render conveyors (below buildings)
     this.renderConveyors(ctx, state, viewLeft, viewTop, viewRight, viewBottom);
 
-    // Render buildings with shadows
-    const sortedBuildings = Array.from(state.buildings.values())
-      .filter(b => {
-        const sx = b.x * TILE_SIZE;
-        const sy = b.y * TILE_SIZE;
-        return sx >= viewLeft - 100 && sx <= viewRight + 100 && sy >= viewTop - 100 && sy <= viewBottom + 100;
-      })
-      .sort((a, b) => a.y - b.y);
+    // Render buildings with shadows — reuse buffer, NO new array per frame
+    this._sortedBuildings.length = 0;
+    for (const building of state.buildings.values()) {
+      const sx = building.x * TILE_SIZE;
+      const sy = building.y * TILE_SIZE;
+      if (sx >= viewLeft - 100 && sx <= viewRight + 100 && sy >= viewTop - 100 && sy <= viewBottom + 100) {
+        this._sortedBuildings.push(building);
+      }
+    }
+    this._sortedBuildings.sort((a, b) => a.y - b.y);
 
-    for (const building of sortedBuildings) {
-      this.renderBuilding(ctx, building, state);
+    for (let i = 0; i < this._sortedBuildings.length; i++) {
+      this.renderBuilding(ctx, this._sortedBuildings[i], state);
     }
 
     this.renderPowerConnections(ctx, state);
 
-    // Render entities sorted bob Y for depth
-    const entities: { y: number; render: () => void }[] = [];
+    // Render entities sorted by Y for depth — reuse buffer
+    this._entityCount = 0;
 
     for (const [, enemy] of state.enemies) {
       const ex = enemy.x * TILE_SIZE;
       const ey = enemy.y * TILE_SIZE;
       if (ex < viewLeft - 50 || ex > viewRight + 50 || ey < viewTop - 50 || ey > viewBottom + 50) continue;
-      entities.push({ y: ey, render: () => this.renderEnemy(ctx, enemy, state) });
+      if (this._entityCount >= this._entityBuf.length) {
+        this._entityBuf.push({ y: 0, render: () => {} });
+      }
+      const e = this._entityBuf[this._entityCount++];
+      e.y = ey;
+      e.render = () => this.renderEnemy(ctx, enemy, state);
     }
 
     for (const [, npc] of state.npcs) {
       const nx = npc.x * TILE_SIZE;
       const ny = npc.y * TILE_SIZE;
       if (nx < viewLeft - 50 || nx > viewRight + 50 || ny < viewTop - 50 || ny > viewBottom + 50) continue;
-      entities.push({ y: ny, render: () => this.renderNPC(ctx, npc, state) });
+      if (this._entityCount >= this._entityBuf.length) {
+        this._entityBuf.push({ y: 0, render: () => {} });
+      }
+      const e = this._entityBuf[this._entityCount++];
+      e.y = ny;
+      e.render = () => this.renderNPC(ctx, npc, state);
     }
 
     // Player
     const py = state.player.y * TILE_SIZE;
-    entities.push({ y: py, render: () => this.renderPlayer(ctx, state) });
+    if (this._entityCount >= this._entityBuf.length) {
+      this._entityBuf.push({ y: 0, render: () => {} });
+    }
+    const pe = this._entityBuf[this._entityCount++];
+    pe.y = py;
+    pe.render = () => this.renderPlayer(ctx, state);
 
-    entities.sort((a, b) => a.y - b.y);
-    for (const e of entities) e.render();
+    // Sort only the used portion
+    const sortSlice = this._entityBuf;
+    const count = this._entityCount;
+    // Simple insertion sort — faster for small N (<100 entities typical)
+    for (let i = 1; i < count; i++) {
+      const key = sortSlice[i];
+      let j = i - 1;
+      while (j >= 0 && sortSlice[j].y > key.y) {
+        sortSlice[j + 1] = sortSlice[j];
+        j--;
+      }
+      sortSlice[j + 1] = key;
+    }
+    for (let i = 0; i < count; i++) {
+      sortSlice[i].render();
+    }
 
     // Render co-op visitors (other players in this world)
     if (state.coopVisitors) {
@@ -200,6 +308,9 @@ export class GameRenderer {
     }
 
     // Render build queue sites (construction scaffolding)
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(255,200,80,0.7)';
+    ctx.lineWidth = 1.5;
     for (const task of state.buildQueue) {
       const bsize = BUILDING_SIZES[task.type] || { w: 1, h: 1 };
       const bx = task.x * TILE_SIZE;
@@ -208,12 +319,7 @@ export class GameRenderer {
       const bh = bsize.h * TILE_SIZE;
       const prog = task.constructionProgress / 100;
 
-      // Scaffolding frame
-      ctx.strokeStyle = 'rgba(255,200,80,0.7)';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([4, 4]);
       ctx.strokeRect(bx + 1, bob + 1, bw - 2, bh - 2);
-      ctx.setLineDash([]);
 
       // Construction fill
       ctx.fillStyle = `rgba(255,200,80,${0.08 + prog * 0.18})`;
@@ -231,11 +337,13 @@ export class GameRenderer {
       ctx.fillStyle = 'rgba(255,200,80,0.9)';
       ctx.fillText('🔨', bx + bw / 2, bob + bh / 2 + 4);
     }
+    ctx.setLineDash([]);
+    ctx.textAlign = 'left';
 
     // Render particles
     this.renderParticles(ctx, state, viewLeft, viewTop, viewRight, viewBottom);
 
-    // Render floating damage numbers
+    // Render floating damage numbers — swap-and-pop, NO splice
     for (let i = this.damageNumbers.length - 1; i >= 0; i--) {
       const dn = this.damageNumbers[i];
       const alpha = dn.life / 40;
@@ -249,14 +357,19 @@ export class GameRenderer {
       ctx.fillText(`-${dn.value}`, dn.x, dn.y);
       dn.y -= 0.35;
       dn.life--;
-      if (dn.life <= 0) this.damageNumbers.splice(i, 1);
+      if (dn.life <= 0) {
+        // Swap-and-pop: move last element into this slot, shrink
+        const last = this.damageNumbers.length - 1;
+        if (i !== last) this.damageNumbers[i] = this.damageNumbers[last];
+        this.damageNumbers.pop();
+      }
     }
     ctx.globalAlpha = 1;
     ctx.textAlign = 'left';
 
     // Render building glow effects (emissive)
-    for (const building of sortedBuildings) {
-      this.renderBuildingGlow(ctx, building);
+    for (let i = 0; i < this._sortedBuildings.length; i++) {
+      this.renderBuildingGlow(ctx, this._sortedBuildings[i]);
     }
 
     ctx.restore();
@@ -266,8 +379,48 @@ export class GameRenderer {
       this.renderNightLighting(state, dayFactor);
     }
 
-    // Weather overlay
-    this.renderWeather(ctx, state);
+    // Sunrise/sunset atmospheric tint
+    const dawnDusk = this.getDawnDuskFactor(dayPhase);
+    if (dawnDusk > 0) {
+      const isSunrise = dayPhase < 0.5;
+      if (isSunrise) {
+        // Sunrise — warm orange/gold
+        ctx.fillStyle = `rgba(255,140,40,${dawnDusk * 0.08})`;
+      } else {
+        // Sunset — deep red/purple
+        ctx.fillStyle = `rgba(200,60,80,${dawnDusk * 0.1})`;
+      }
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // Update & render weather — throttled to every 2 frames
+    if (this.frameCount % 2 === 0) {
+      this.weatherSystem.setWeather(state.weather as WeatherType || 'clear');
+      this.weatherScheduler.update((w) => this.weatherSystem.setWeather(w));
+    }
+    this.weatherSystem.update(canvas.width, canvas.height, state.camera.x, state.camera.y);
+    this.weatherSystem.render(ctx, canvas.width, canvas.height, state.camera.x, state.camera.y);
+
+    // Update & render particle effects — throttled
+    if (this.frameCount % 2 === 0) this.particleEffects.update();
+    this.particleEffects.render(ctx, state.camera.x, state.camera.y);
+
+    // Update & render ambient atmosphere — throttled
+    if (this.frameCount % 3 === 0) {
+      this.ambientAtmosphere.update(
+        canvas.width, canvas.height,
+        state.camera.x, state.camera.y,
+        dayFactor,
+        state.buildings.size,
+        state.tick
+      );
+    }
+    this.ambientAtmosphere.render(ctx, state.camera.x, state.camera.y);
+
+    // Pollution overlay — throttled to every 8 frames
+    if (this.frameCount % 8 === 0) {
+      this.pollutionOverlay.render(ctx, state, state.camera.x, state.camera.y, canvas.width, canvas.height, this.frameCount);
+    }
 
     // Vignette
     this.renderVignette(ctx);
@@ -278,46 +431,31 @@ export class GameRenderer {
       ctx.fillStyle = `rgba(200,0,0,${pulse * 0.08})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
+
+    // Screen effects (shockwaves, damage vignette, flash)
+    this.screenEffects.render(ctx, canvas.width, canvas.height, state.camera.x, state.camera.y);
+
+    // Restore from screen shake
+    ctx.restore();
   }
 
-  private renderTile(ctx: CanvasRenderingContext2D, tile: Tile, dayFactor: number, state: GameState) {
+  private renderTile(ctx: CanvasRenderingContext2D, tile: Tile, nightTint: string | null, state: GameState) {
     const x = tile.x * TILE_SIZE;
     const y = tile.y * TILE_SIZE;
 
-    // Water handled bob renderResource
+    // Water handled via renderResource
     if (tile.resource !== 'water') {
-      // Biome base RGB
-      const biomeRGB: Record<string, [number, number, number]> = {
-        grass:    [54,  88, 46],
-        forest:   [28,  60, 16],
-        desert:   [158, 128, 84],
-        snow:     [176, 180, 184],
-        swamp:    [30,  52, 32],
-        volcanic: [50,  18,  8],
-      };
-      const base = biomeRGB[tile.biome] || biomeRGB.grass;
+      // Draw pre-generated terrain sprite
+      const sprite = getTerrainSprite(tile.biome, tile.x, tile.y);
+      if (sprite) {
+        ctx.drawImage(sprite, x, y, TILE_SIZE, TILE_SIZE);
+      }
 
-      // Multi-scale terrain variation — gives big visible patches + micro noise
-      const px = tile.x >> 3; // 8-tile macro patches
-      const py = tile.y >> 3;
-      const macroH = ((px * 374761393 + py * 1013904223) & 0x7FFFF) / 524287.0;
-
-      const mx = tile.x >> 2; // 4-tile medium patches
-      const my = tile.y >> 2;
-      const midH = ((mx * 2654435761 + my * 2246822519) & 0x7FFFF) / 524287.0;
-
-      const microH = ((tile.x * 7919 + tile.y * 104729) & 0xFFFF) / 65535.0;
-
-      const variation = 1.0
-        + (macroH - 0.5) * 0.44   // ±22% — large visible patches
-        + (midH   - 0.5) * 0.18   // ±9%  — medium variation
-        + (microH - 0.5) * 0.08;  // ±4%  — per-tile noise
-
-      const dayF = 0.45 + dayFactor * 0.55;
-      const f = Math.max(0.05, Math.min(1.6, dayF * variation));
-
-      ctx.fillStyle = `rgb(${Math.min(255, base[0] * f | 0)},${Math.min(255, base[1] * f | 0)},${Math.min(255, base[2] * f | 0)})`;
-      ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+      // Apply day/night tint
+      if (nightTint) {
+        ctx.fillStyle = nightTint;
+        ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+      }
 
       // Grid lines only when very zoomed in
       if (state.camera.zoom > 2.5) {
@@ -329,7 +467,7 @@ export class GameRenderer {
 
     // Trees
     if (hasTreeAt(tile.x, tile.y, tile.biome) && !tile.building) {
-      this.renderTree(ctx, x, y, tile.biome, dayFactor);
+      this.renderTree(ctx, x, y, tile.biome);
     }
 
     // Resources
@@ -345,21 +483,21 @@ export class GameRenderer {
     }
   }
 
-  private renderTree(ctx: CanvasRenderingContext2D, x: number, y: number, biome: string, dayFactor: number) {
-    const trunkX = x + TILE_SIZE / 2 - 2;
-    const groundY = y + TILE_SIZE / 2 + 4;
-
-    // Trunk
-    ctx.fillStyle = biome === 'forest' ? '#1e1008' : '#2e1c08';
-    ctx.fillRect(trunkX, groundY - 10, 4, 12);
-
-    // Canopy — pojedynczy ellipse zamiast 5 warstw
-    const sway = Math.sin(this.frameCount * 0.018 + x * 0.07 + y * 0.05) * 1.8;
-    const canopyColor = biome === 'forest' ? '#163d0c' : '#1e5010';
-    ctx.fillStyle = canopyColor;
-    ctx.beginPath();
-    ctx.ellipse(trunkX + 2 + sway, groundY - 14, 9, 7, 0, 0, Math.PI * 2);
-    ctx.fill();
+  private renderTree(ctx: CanvasRenderingContext2D, x: number, y: number, biome: string) {
+    const sprite = getTreeSprite(biome, x / TILE_SIZE | 0, y / TILE_SIZE | 0);
+    if (sprite) {
+      // Animated sway effect — gentle wind
+      const windPhase = this.frameCount * 0.015 + x * 0.05 + y * 0.03;
+      const sway = Math.sin(windPhase) * 2.0;
+      const sway2 = Math.sin(windPhase * 1.3 + 1.5) * 0.8;
+      // Shadow underneath
+      ctx.fillStyle = 'rgba(0,0,0,0.15)';
+      ctx.beginPath();
+      ctx.ellipse(x + TILE_SIZE / 2 + sway * 0.3, y + TILE_SIZE - 1, 8, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Tree with sway
+      ctx.drawImage(sprite, x + sway, y - 8 + sway2, TILE_SIZE, TILE_SIZE + 8);
+    }
   }
 
   private renderResource(ctx: CanvasRenderingContext2D, tile: Tile) {
@@ -368,8 +506,38 @@ export class GameRenderer {
     const color = RESOURCE_COLORS[tile.resource!] || '#ffffff';
 
     if (tile.resource === 'water') {
-      ctx.fillStyle = '#1a4a8a';
-      ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+      const sprite = getWaterSprite(tile.x, tile.y);
+      if (sprite) {
+        ctx.drawImage(sprite, x, y, TILE_SIZE, TILE_SIZE);
+        // Animated wave shimmer
+        const shimmer = Math.sin(this.frameCount * 0.03 + tile.x * 0.5 + tile.y * 0.3) * 0.15 + 0.05;
+        ctx.fillStyle = `rgba(200,230,255,${shimmer})`;
+        ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+        // Water current flow lines
+        const flowPhase = this.frameCount * 0.02 + tile.x * 0.3;
+        ctx.strokeStyle = `rgba(180,210,240,${0.08 + Math.sin(flowPhase) * 0.04})`;
+        ctx.lineWidth = 0.8;
+        for (let i = 0; i < 3; i++) {
+          const fy = y + 4 + i * (TILE_SIZE / 3);
+          ctx.beginPath();
+          ctx.moveTo(x, fy);
+          ctx.quadraticCurveTo(
+            x + TILE_SIZE / 2, fy + Math.sin(flowPhase + i) * 3,
+            x + TILE_SIZE, fy + Math.sin(flowPhase + i + 1) * 2
+          );
+          ctx.stroke();
+        }
+        // Occasional sparkle on water surface
+        if (this.frameCount % 25 === 0) {
+          const sparkX = x + ((tile.x * 17 + this.frameCount) % TILE_SIZE);
+          const sparkY = y + ((tile.y * 23 + this.frameCount * 7) % TILE_SIZE);
+          ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          ctx.fillRect(sparkX, sparkY, 2, 1);
+        }
+      } else {
+        ctx.fillStyle = '#1a4a8a';
+        ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+      }
       return;
     }
 
@@ -385,8 +553,6 @@ export class GameRenderer {
     ctx.fillStyle = color;
     ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
     ctx.globalAlpha = 1;
-  }
-  }
 
     // Parse ore color components
     const rC = parseInt(color.slice(1, 3), 16);
@@ -404,6 +570,12 @@ export class GameRenderer {
 
     // Draw 3–5 ore rock chunks per tile
     const rockCount = 3 + Math.floor(h3 * 3);
+    const darkRC = Math.floor(rC * 0.5);
+    const darkGC = Math.floor(gC * 0.5);
+    const darkBC = Math.floor(bC * 0.5);
+    const darkOutlineColor = `rgba(${darkRC},${darkGC},${darkBC},0.8)`;
+    ctx.fillStyle = color;
+    ctx.beginPath();
     for (let i = 0; i < rockCount; i++) {
       const t = i / rockCount;
       const rx = x + ((h1 + t * 0.37) % 1) * (TILE_SIZE - 10) + 5;
@@ -431,8 +603,8 @@ export class GameRenderer {
       ctx.closePath();
       ctx.fill();
 
-      // Rock outline (darker edge)
-      ctx.strokeStyle = `rgba(${Math.floor(rC * 0.5)},${Math.floor(gC * 0.5)},${Math.floor(bC * 0.5)},0.8)`;
+      // Rock outline (darker edge) — pre-computed color
+      ctx.strokeStyle = darkOutlineColor;
       ctx.lineWidth = 0.6;
       ctx.stroke();
 
@@ -466,7 +638,6 @@ export class GameRenderer {
     const size = BUILDING_SIZES[building.type] || { w: 1, h: 1 };
     const w = size.w * TILE_SIZE;
     const h = size.h * TILE_SIZE;
-    const color = BUILDING_COLORS[building.type] || '#888';
 
     // Directional sun shadow + ambient contact shadow
     if (this.sunShadowAlpha > 0.02) {
@@ -478,54 +649,21 @@ export class GameRenderer {
     ctx.fillStyle = 'rgba(0,0,0,0.15)';
     ctx.fillRect(x + 2, y + h - 4, w - 4, 4);
 
-    // Building body
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, w, h);
-
-    // Top edge highlight (metal sheen)
-    ctx.fillStyle = 'rgba(255,255,255,0.18)';
-    ctx.fillRect(x + 2, y + 1, w - 4, 2);
-    // Left edge highlight
-    ctx.fillStyle = 'rgba(255,255,255,0.08)';
-    ctx.fillRect(x + 1, y + 2, 2, h - 4);
-
-    // Border
-    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-
-    // Outer rim highlight
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-    ctx.lineWidth = 0.5;
-    ctx.strokeRect(x + 1.5, y + 1.5, w - 3, h - 3);
-
-    // Industrial panel dividers
-    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-    ctx.lineWidth = 0.5;
-    if (h >= TILE_SIZE * 2) {
-      ctx.beginPath();
-      ctx.moveTo(x + 3, y + h / 2);
-      ctx.lineTo(x + w - 3, y + h / 2);
-      ctx.stroke();
-    }
-    if (w >= TILE_SIZE * 3) {
-      ctx.beginPath();
-      ctx.moveTo(x + w / 3, y + 3);
-      ctx.lineTo(x + w / 3, y + h - 3);
-      ctx.moveTo(x + w * 2 / 3, y + 3);
-      ctx.lineTo(x + w * 2 / 3, y + h - 3);
-      ctx.stroke();
+    // Draw pre-generated building sprite as base
+    const sprite = getBuildingSprite(building.type);
+    if (sprite) {
+      ctx.drawImage(sprite, x, y, w, h);
+    } else {
+      // Fallback: colored rectangle
+      const color = BUILDING_COLORS[building.type] || '#888';
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
     }
 
-    // Corner rivets — fillRect zamiast arc
-    const rivetInset = 4;
-    ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    ctx.fillRect(x + rivetInset, y + rivetInset, 3, 3);
-    ctx.fillRect(x + w - rivetInset - 3, y + rivetInset, 3, 3);
-    ctx.fillRect(x + rivetInset, y + h - rivetInset - 3, 3, 3);
-    ctx.fillRect(x + w - rivetInset - 3, y + h - rivetInset - 3, 3, 3);
-
-    // Direction arrow — fillRect zamiast arc
+    // Direction arrow — only draw on top of sprite
     const dir = DIR_OFFSETS[building.direction];
     if (dir) {
       const arrowX = Math.round(x + w / 2 + dir.dx * w / 3);
@@ -545,24 +683,23 @@ export class GameRenderer {
       ctx.fillRect(x + 0.5, y - 7.5, (w - 1) * progress, 4);
     }
 
-    // Health bar
+    // Health bar — fillRect (no roundRect overhead)
     if (building.health < building.maxHealth) {
       const hp = building.health / building.maxHealth;
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.beginPath();
-      ctx.roundRect(x, y + h + 3, w, 4, 2);
-      ctx.fill();
+      ctx.fillRect(x, y + h + 3, w, 4);
       const hpColor = hp > 0.5 ? '#22c55e' : hp > 0.25 ? '#f59e0b' : '#ef4444';
       ctx.fillStyle = hpColor;
-      ctx.beginPath();
-      ctx.roundRect(x + 0.5, y + 3.5, (w - 1) * hp, 3, 1.5);
-      ctx.fill();
+      ctx.fillRect(x + 0.5, y + 3.5, (w - 1) * hp, 3);
     }
 
-    // Subtle status indicator: thin horizontal bar at bottom
+    // Status indicator bar at bottom
     let statusColor: string;
     if (building.type === 'boiler') {
-      const coalCount = building.inventory.find(s => s.itemId === 'coal')?.count ?? 0;
+      let coalCount = 0;
+      for (let ci = 0; ci < building.inventory.length; ci++) {
+        if (building.inventory[ci].itemId === 'coal') { coalCount = building.inventory[ci].count; break; }
+      }
       statusColor = building.isActive && coalCount > 0 ? '#ff8800' : coalCount === 0 ? '#ff2222' : '#444';
     } else {
       statusColor = building.isActive ? '#22dd44' : '#444';
@@ -570,20 +707,133 @@ export class GameRenderer {
     ctx.fillStyle = statusColor;
     ctx.fillRect(x + 2, y + h - 3, (w - 4), 2);
     if (building.isActive && building.recipe && building.progress > 0) {
-      // progress fill on same bar in accent color
       const prog = Math.min(1, building.progress / (building.recipe?.craftTime ?? 100));
       ctx.fillStyle = '#88ffaa';
       ctx.fillRect(x + 2, y + h - 3, (w - 4) * prog, 2);
     }
 
-    // Type-specific details
-    this.renderBuildingDetails(ctx, building, x, y, w, h);
+    // Animated type-specific details (overlaid on sprite)
+    this.renderBuildingAnimations(ctx, building, x, y, w, h);
+
+    // Active building ambient effects
+    if (building.isActive) {
+      const cx2 = x + w / 2;
+      const cy2 = y + h / 2;
+
+      // Smoke from chimneys — furnaces, refineries, boilers
+      if ((building.type === 'furnace' || building.type === 'refinery' || building.type === 'boiler') && this.frameCount % 6 === 0) {
+        ctx.fillStyle = `rgba(80,70,60,${0.15 + Math.random() * 0.1})`;
+        const smokeX = cx2 + Math.sin(this.frameCount * 0.03) * 3;
+        const smokeY = y - 8 - (this.frameCount % 30);
+        ctx.beginPath();
+        ctx.arc(smokeX, smokeY, 3 + (this.frameCount % 30) * 0.15, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Steam from chemical plants
+      if (building.type === 'chemical_plant' && this.frameCount % 8 === 0) {
+        ctx.fillStyle = 'rgba(200,220,240,0.12)';
+        const sx = cx2 + Math.sin(this.frameCount * 0.04) * 4;
+        const sy = y - 4 - (this.frameCount % 24);
+        ctx.beginPath();
+        ctx.arc(sx, sy, 2 + (this.frameCount % 24) * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Sparks from assemblers
+      if (building.type === 'assembler' && this.frameCount % 15 === 0) {
+        ctx.fillStyle = '#ffcc44';
+        for (let i = 0; i < 2; i++) {
+          const sx = cx2 + (Math.random() - 0.5) * w * 0.6;
+          const sy = cy2 + (Math.random() - 0.5) * h * 0.4;
+          ctx.fillRect(sx, sy, 1.5, 1.5);
+        }
+      }
+
+      // Steam vents from steam engines
+      if (building.type === 'steam_engine' && this.frameCount % 10 === 0) {
+        ctx.fillStyle = 'rgba(220,230,240,0.15)';
+        const sx = cx2 + Math.sin(this.frameCount * 0.06) * 5;
+        const sy = y - 2 - (this.frameCount % 20);
+        ctx.beginPath();
+        ctx.arc(sx, sy, 2 + (this.frameCount % 20) * 0.15, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Energy pulse for laser turret / tesla coil
+      if ((building.type === 'laser_turret' || building.type === 'tesla_coil') && this.frameCount % 30 < 3) {
+        ctx.strokeStyle = building.type === 'tesla_coil' ? 'rgba(150,100,255,0.3)' : 'rgba(0,255,255,0.3)';
+        ctx.lineWidth = 1;
+        const pulseR = 10 + (this.frameCount % 30) * 2;
+        ctx.beginPath();
+        ctx.arc(cx2, cy2, pulseR, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Mining drill sparks
+      if (building.type === 'miner' && this.frameCount % 10 === 0) {
+        ctx.fillStyle = '#ffaa44';
+        const angle = this.frameCount * 0.1;
+        for (let i = 0; i < 3; i++) {
+          const a = angle + i * Math.PI * 2 / 3;
+          const sparkR = 6 + Math.random() * 4;
+          ctx.fillRect(cx2 + Math.cos(a) * sparkR - 0.5, cy2 + Math.sin(a) * sparkR - 0.5, 2, 2);
+        }
+      }
+
+      // Radar sweep
+      if (building.type === 'radar') {
+        const sweepAngle = (this.frameCount * 0.02) % (Math.PI * 2);
+        ctx.strokeStyle = 'rgba(6,182,212,0.2)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(cx2, cy2);
+        ctx.lineTo(cx2 + Math.cos(sweepAngle) * 18, cy2 + Math.sin(sweepAngle) * 18);
+        ctx.stroke();
+      }
+
+      // Lab research glow
+      if (building.type === 'lab' && building.progress > 0) {
+        const glowIntensity = Math.sin(this.frameCount * 0.08) * 0.15 + 0.2;
+        ctx.fillStyle = `rgba(168,85,247,${glowIntensity})`;
+        ctx.beginPath();
+        ctx.arc(cx2, cy2, 10, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Silo launch countdown
+      if (building.type === 'silo' && building.progress > 0) {
+        const prog = building.progress / (building.recipe?.craftTime ?? 1);
+        if (prog > 0.9) {
+          const shake = Math.sin(this.frameCount * 0.3) * 2 * (prog - 0.9) * 10;
+          ctx.fillStyle = `rgba(255,100,30,${(prog - 0.9) * 5})`;
+          ctx.beginPath();
+          ctx.arc(cx2 + shake, cy2 - 5, 4 + Math.random() * 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Roboport drone activity
+      if (building.type === 'roboport' && this.frameCount % 40 < 20) {
+        ctx.fillStyle = 'rgba(100,200,220,0.15)';
+        ctx.beginPath();
+        ctx.arc(cx2, cy2, 16 + Math.sin(this.frameCount * 0.05) * 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
   }
 
   private renderPowerConnections(ctx: CanvasRenderingContext2D, state: GameState) {
-    const boilers = Array.from(state.buildings.values()).filter(b => b.type === 'boiler');
-    const steamEngines = Array.from(state.buildings.values()).filter(b => b.type === 'steam_engine');
-    const powerPoles = Array.from(state.buildings.values()).filter(b => b.type === 'power_pole');
+    // Single pass — no Array.from + filter per type
+    const boilers: Building[] = [];
+    const steamEngines: Building[] = [];
+    const powerPoles: Building[] = [];
+
+    for (const building of state.buildings.values()) {
+      if (building.type === 'boiler') boilers.push(building);
+      else if (building.type === 'steam_engine') steamEngines.push(building);
+      else if (building.type === 'power_pole') powerPoles.push(building);
+    }
 
     // Draw orange steam pipes connecting boilers to nearby steam engines
     for (const boiler of boilers) {
@@ -619,7 +869,10 @@ export class GameRenderer {
       }
     }
 
-    // Draw yellow wires between power poles (within 15 tiles of each other)
+    // Draw yellow wires between power poles (within 15 tiles of each other) — batched
+    ctx.strokeStyle = 'rgba(220,200,60,0.55)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
     for (let i = 0; i < powerPoles.length; i++) {
       for (let j = i + 1; j < powerPoles.length; j++) {
         const a = powerPoles[i];
@@ -632,33 +885,33 @@ export class GameRenderer {
           const ay = a.y * TILE_SIZE + TILE_SIZE / 2;
           const bx = b.x * TILE_SIZE + TILE_SIZE / 2;
           const bob = b.y * TILE_SIZE + TILE_SIZE / 2;
-          // Catenary sag
           const midX = (ax + bx) / 2;
           const midY = (ay + bob) / 2 + dist * 1.5;
-          ctx.strokeStyle = 'rgba(220,200,60,0.55)';
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
           ctx.moveTo(ax, ay);
           ctx.quadraticCurveTo(midX, midY, bx, bob);
-          ctx.stroke();
         }
       }
     }
+    ctx.stroke();
 
-    // Power pole range indicator (very subtle, only when there are poles)
-    for (const pole of powerPoles) {
-      const px = pole.x * TILE_SIZE + TILE_SIZE / 2;
-      const py = pole.y * TILE_SIZE + TILE_SIZE / 2;
-      const rangeR = 15 * TILE_SIZE;
+    // Power pole range indicator — batched into single path
+    if (powerPoles.length > 0 && powerPoles.length < 200) {
       ctx.strokeStyle = 'rgba(220,200,60,0.08)';
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 8]);
       ctx.beginPath();
-      ctx.arc(px, py, rangeR, 0, Math.PI * 2);
+      for (let i = 0; i < powerPoles.length; i++) {
+        const pole = powerPoles[i];
+        ctx.moveTo(pole.x * TILE_SIZE + TILE_SIZE / 2 + 15 * TILE_SIZE, pole.y * TILE_SIZE + TILE_SIZE / 2);
+        ctx.arc(pole.x * TILE_SIZE + TILE_SIZE / 2, pole.y * TILE_SIZE + TILE_SIZE / 2, 15 * TILE_SIZE, 0, Math.PI * 2);
+      }
       ctx.stroke();
       ctx.setLineDash([]);
     }
   }
+
+  // Cached glow gradients — one per type, reused across frames
+  private static readonly _glowCache = new Map<string, { canvas: HTMLCanvasElement; radius: number }>();
 
   private renderBuildingGlow(ctx: CanvasRenderingContext2D, building: Building) {
     const x = building.x * TILE_SIZE;
@@ -667,79 +920,90 @@ export class GameRenderer {
     const w = size.w * TILE_SIZE;
     const h = size.h * TILE_SIZE;
 
+    // Only render glow for active buildings of specific types
+    if (!building.isActive) return;
+
     switch (building.type) {
       case 'furnace': {
-        if (building.isActive) {
-          const flicker = Math.sin(this.frameCount * 0.15) * 5 + 18;
-          const glow = ctx.createRadialGradient(x + w / 2, y + h / 2, 0, x + w / 2, y + h / 2, flicker);
-          glow.addColorStop(0, 'rgba(255,100,10,0.4)');
-          glow.addColorStop(0.5, 'rgba(255,50,0,0.15)');
-          glow.addColorStop(1, 'rgba(200,30,0,0)');
-          ctx.fillStyle = glow;
-          ctx.fillRect(x - 15, y - 15, w + 30, h + 30);
-        }
+        const flicker = Math.sin(this.frameCount * 0.15) * 5 + 18;
+        const glow = ctx.createRadialGradient(x + w / 2, y + h / 2, 0, x + w / 2, y + h / 2, flicker);
+        glow.addColorStop(0, 'rgba(255,100,10,0.4)');
+        glow.addColorStop(0.5, 'rgba(255,50,0,0.15)');
+        glow.addColorStop(1, 'rgba(200,30,0,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(x - 15, y - 15, w + 30, h + 30);
         break;
       }
       case 'lab': {
-        if (building.isActive) {
-          const pulse = Math.sin(this.frameCount * 0.05) * 0.1 + 0.18;
-          const glow = ctx.createRadialGradient(x + w / 2, y + h / 2, 0, x + w / 2, y + h / 2, 24);
-          glow.addColorStop(0, `rgba(0,180,255,${pulse})`);
-          glow.addColorStop(1, 'rgba(0,80,200,0)');
-          ctx.fillStyle = glow;
-          ctx.fillRect(x - 12, y - 12, w + 24, h + 24);
-        }
+        const pulse = Math.sin(this.frameCount * 0.05) * 0.1 + 0.18;
+        const glow = ctx.createRadialGradient(x + w / 2, y + h / 2, 0, x + w / 2, y + h / 2, 24);
+        glow.addColorStop(0, `rgba(0,180,255,${pulse})`);
+        glow.addColorStop(1, 'rgba(0,80,200,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(x - 12, y - 12, w + 24, h + 24);
         break;
       }
       case 'boiler': {
-        if (building.isActive) {
-          const flicker2 = Math.sin(this.frameCount * 0.1) * 4 + 14;
-          const glow = ctx.createRadialGradient(x + w / 2, y + h * 0.3, 0, x + w / 2, y + h * 0.3, flicker2);
-          glow.addColorStop(0, 'rgba(255,80,0,0.2)');
-          glow.addColorStop(1, 'rgba(200,50,0,0)');
-          ctx.fillStyle = glow;
-          ctx.fillRect(x - 8, y - 12, w + 16, h + 16);
-        }
+        const flicker2 = Math.sin(this.frameCount * 0.1) * 4 + 14;
+        const glow = ctx.createRadialGradient(x + w / 2, y + h * 0.3, 0, x + w / 2, y + h * 0.3, flicker2);
+        glow.addColorStop(0, 'rgba(255,80,0,0.2)');
+        glow.addColorStop(1, 'rgba(200,50,0,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(x - 8, y - 12, w + 16, h + 16);
         break;
       }
       case 'steam_engine': {
-        if (building.isActive) {
-          const pulse2 = Math.sin(this.frameCount * 0.08) * 0.08 + 0.1;
-          const glow = ctx.createRadialGradient(x + w * 0.72, y + h * 0.5, 0, x + w * 0.72, y + h * 0.5, 22);
-          glow.addColorStop(0, `rgba(180,220,255,${pulse2})`);
-          glow.addColorStop(1, 'rgba(100,160,220,0)');
-          ctx.fillStyle = glow;
-          ctx.fillRect(x - 8, y - 8, w + 16, h + 16);
-        }
+        const pulse2 = Math.sin(this.frameCount * 0.08) * 0.08 + 0.1;
+        const glow = ctx.createRadialGradient(x + w * 0.72, y + h * 0.5, 0, x + w * 0.72, y + h * 0.5, 22);
+        glow.addColorStop(0, `rgba(180,220,255,${pulse2})`);
+        glow.addColorStop(1, 'rgba(100,160,220,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(x - 8, y - 8, w + 16, h + 16);
         break;
       }
       case 'assembler': {
-        if (building.isActive) {
-          const p = Math.sin(this.frameCount * 0.06) * 0.05 + 0.08;
-          const glow = ctx.createRadialGradient(x + w / 2, y + h / 2, 0, x + w / 2, y + h / 2, 18);
-          glow.addColorStop(0, `rgba(74,176,255,${p})`);
-          glow.addColorStop(1, 'rgba(20,100,200,0)');
-          ctx.fillStyle = glow;
-          ctx.fillRect(x - 6, y - 6, w + 12, h + 12);
-        }
+        const p = Math.sin(this.frameCount * 0.06) * 0.05 + 0.08;
+        const glow = ctx.createRadialGradient(x + w / 2, y + h / 2, 0, x + w / 2, y + h / 2, 18);
+        glow.addColorStop(0, `rgba(74,176,255,${p})`);
+        glow.addColorStop(1, 'rgba(20,100,200,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(x - 6, y - 6, w + 12, h + 12);
         break;
       }
       case 'radar': {
-        if (building.isActive) {
-          const pulse3 = Math.sin(this.frameCount * 0.05) * 0.08 + 0.12;
-          const glow = ctx.createRadialGradient(x + w / 2, y + h / 2, 0, x + w / 2, y + h / 2, 20);
-          glow.addColorStop(0, `rgba(0,200,80,${pulse3})`);
-          glow.addColorStop(1, 'rgba(0,100,40,0)');
-          ctx.fillStyle = glow;
-          ctx.fillRect(x - 8, y - 8, w + 16, h + 16);
-        }
+        const pulse3 = Math.sin(this.frameCount * 0.05) * 0.08 + 0.12;
+        const glow = ctx.createRadialGradient(x + w / 2, y + h / 2, 0, x + w / 2, y + h / 2, 20);
+        glow.addColorStop(0, `rgba(0,200,80,${pulse3})`);
+        glow.addColorStop(1, 'rgba(0,100,40,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(x - 8, y - 8, w + 16, h + 16);
         break;
       }
     }
   }
 
-  private renderBuildingDetails(ctx: CanvasRenderingContext2D, building: Building, x: number, y: number, w: number, h: number) {
+  private renderBuildingAnimations(ctx: CanvasRenderingContext2D, building: Building, x: number, y: number, w: number, h: number) {
     switch (building.type) {
+      case 'pipe': {
+        // Animated fluid flow inside pipe
+        if (building.isActive) {
+          const flowSpeed = this.frameCount * 0.04;
+          const pipeY = y + h / 2;
+          // Horizontal fluid blobs — batched into single path
+          ctx.fillStyle = 'rgba(80,160,220,0.3)';
+          ctx.beginPath();
+          for (let i = 0; i < 4; i++) {
+            const fx = x + ((flowSpeed * 8 + i * (TILE_SIZE / 4)) % TILE_SIZE);
+            ctx.moveTo(fx + 3, pipeY);
+            ctx.ellipse(fx, pipeY, 3, 2, 0, 0, Math.PI * 2);
+          }
+          ctx.fill();
+          // Pipe highlight shimmer
+          ctx.fillStyle = 'rgba(200,230,255,0.08)';
+          ctx.fillRect(x + 2, pipeY - 3, TILE_SIZE - 4, 2);
+        }
+        break;
+      }
       case 'miner': {
         // Drill derrick A-frame
         const dcx = x + w / 2;
@@ -810,8 +1074,11 @@ export class GameRenderer {
         ctx.beginPath();
         ctx.arc(x + w - 7, y + 7, 3.5, -Math.PI * 0.8, -Math.PI * 0.8 + pressure * Math.PI * 1.6);
         ctx.stroke();
-        // Coal level indicator & "NO COAL" warning
-        const coalCount2 = building.inventory.find((s: {itemId: string; count: number}) => s.itemId === 'coal')?.count ?? 0;
+        // Coal level indicator & "NO COAL" warning — simple loop instead of find
+        let coalCount2 = 0;
+        for (let ci = 0; ci < building.inventory.length; ci++) {
+          if (building.inventory[ci].itemId === 'coal') { coalCount2 = building.inventory[ci].count; break; }
+        }
         if (coalCount2 === 0 && Math.floor(this.frameCount / 20) % 2 === 0) {
           ctx.fillStyle = 'rgba(255,60,60,0.95)';
           ctx.font = 'bold 8px monospace';
@@ -1207,19 +1474,168 @@ export class GameRenderer {
         ctx.arc(clawX, clawY, 2.5, 0, Math.PI * 2);
         ctx.fill();
 
+        // Show carried item on claw when active
+        if (building.isActive && building.inventory.length > 0) {
+          const item = building.inventory[0];
+          if (item) {
+            const itemColor = RESOURCE_COLORS[item.itemId] || '#aaa888';
+            ctx.fillStyle = itemColor;
+            ctx.beginPath();
+            ctx.arc(clawX, clawY - 3, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+            // Item highlight
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            ctx.beginPath();
+            ctx.arc(clawX - 0.5, clawY - 3.5, 1, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
         ctx.lineCap = 'butt';
+        break;
+      }
+      case 'laser_turret': {
+        if (building.isActive) {
+          // Pulsing lens glow
+          const pulse = Math.sin(this.frameCount * 0.1) * 0.3 + 0.7;
+          ctx.fillStyle = `rgba(0,255,255,${pulse * 0.4})`;
+          ctx.beginPath();
+          ctx.arc(x + w / 2, 4, 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+      }
+      case 'tesla_coil': {
+        if (building.isActive) {
+          // Electrical arcs
+          const arcCount = 3;
+          for (let i = 0; i < arcCount; i++) {
+            if (Math.random() < 0.4) {
+              const angle = Math.random() * Math.PI * 2;
+              const len = 8 + Math.random() * 12;
+              ctx.strokeStyle = `rgba(180,130,255,${0.5 + Math.random() * 0.5})`;
+              ctx.lineWidth = 1 + Math.random();
+              ctx.beginPath();
+              ctx.moveTo(x + w / 2, y + 4);
+              const segments = 4;
+              let px = x + w / 2;
+              let py = y + 4;
+              for (let s = 0; s < segments; s++) {
+                px += Math.cos(angle) * (len / segments) + (Math.random() - 0.5) * 6;
+                py += Math.sin(angle) * (len / segments) + (Math.random() - 0.5) * 6;
+                ctx.lineTo(px, py);
+              }
+              ctx.stroke();
+            }
+          }
+        }
+        break;
+      }
+      case 'flak_cannon': {
+        // Muzzle flash when shooting
+        if (building.isActive && this.frameCount % 12 < 2) {
+          ctx.fillStyle = 'rgba(255,200,50,0.8)';
+          ctx.beginPath();
+          ctx.arc(x + w / 2, y + 2, 4 + Math.random() * 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+      }
+      case 'solar_panel': {
+        // Subtle glint
+        if (this.frameCount % 60 < 3) {
+          ctx.fillStyle = 'rgba(255,255,255,0.2)';
+          ctx.fillRect(x + 5, y + 7, 3, 2);
+        }
+        break;
+      }
+      case 'accumulator': {
+        // Charge level glow
+        const chargeRatio = building.energy / (building.maxEnergy || 200);
+        const glowR = Math.round(255 * (1 - chargeRatio));
+        const glowG = Math.round(255 * chargeRatio);
+        ctx.fillStyle = `rgba(${glowR},${glowG},50,0.4)`;
+        ctx.fillRect(x + 8, y + 10, (w - 16) * chargeRatio, 3);
+        break;
+      }
+      case 'roboport': {
+        // Drone orbiting animation
+        if (building.isActive) {
+          const droneAngle = this.frameCount * 0.05;
+          for (let i = 0; i < 2; i++) {
+            const a = droneAngle + i * Math.PI;
+            const dx = x + w / 2 + Math.cos(a) * 14;
+            const dy = y + h / 2 + Math.sin(a) * 14;
+            ctx.fillStyle = '#66ccee';
+            ctx.beginPath();
+            ctx.arc(dx, dy, 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        break;
+      }
+      case 'centrifuge': {
+        // Spinning animation
+        const spinAngle = building.isActive ? this.frameCount * 0.15 : 0;
+        ctx.save();
+        ctx.translate(x + w / 2, y + h / 2);
+        ctx.rotate(spinAngle);
+        ctx.strokeStyle = '#66aa66';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 3; i++) {
+          const a = i * Math.PI * 2 / 3;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(Math.cos(a) * 10, Math.sin(a) * 10);
+          ctx.stroke();
+        }
+        ctx.restore();
+        break;
+      }
+      case 'artillery': {
+        // Barrel recoil
+        if (building.isActive && this.frameCount % 30 < 3) {
+          const recoil = Math.sin(this.frameCount * 0.5) * 3;
+          ctx.strokeStyle = '#5a5a48';
+          ctx.lineWidth = 4;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(x + w / 2, y + h / 2 - 2);
+          ctx.lineTo(x + w + 4 + recoil, y + h / 2 - 6);
+          ctx.stroke();
+          ctx.lineCap = 'butt';
+        }
+        break;
+      }
+      case 'mine': {
+        // Red warning blink when enemy nearby
+        if (building.isActive) {
+          const blink = Math.floor(this.frameCount / 8) % 2;
+          if (blink) {
+            ctx.fillStyle = 'rgba(255,0,0,0.6)';
+            ctx.beginPath();
+            ctx.arc(x + w / 2, y + h / 2 + 2, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
         break;
       }
     }
   }
 
   private renderConveyors(ctx: CanvasRenderingContext2D, state: GameState, vl: number, vt: number, vr: number, vb: number) {
+    // Pre-set rail gradient colors — reuse across all conveyors
+    const railHGrad = ctx.createLinearGradient(0, 0, 0, 4);
+    railHGrad.addColorStop(0, '#5a5648');
+    railHGrad.addColorStop(1, '#3a3830');
+    const railVGrad = ctx.createLinearGradient(0, 0, 4, 0);
+    railVGrad.addColorStop(0, '#5a5648');
+    railVGrad.addColorStop(1, '#3a3830');
+
     for (const [key, segments] of state.conveyors) {
-      const [xStr, yStr] = key.split(',');
-      const bx = parseInt(xStr);
-      const bob = parseInt(yStr);
-      const sx = bx * TILE_SIZE;
-      const sy = bob * TILE_SIZE;
+      const commaIdx = key.indexOf(',');
+      const sx = parseInt(key.substring(0, commaIdx)) * TILE_SIZE;
+      const sy = parseInt(key.substring(commaIdx + 1)) * TILE_SIZE;
       if (sx < vl - TILE_SIZE || sx > vr + TILE_SIZE || sy < vt - TILE_SIZE || sy > vb + TILE_SIZE) continue;
 
       const building = state.buildings.get(key);
@@ -1244,12 +1660,7 @@ export class GameRenderer {
       }
 
       // ── Metal side rails ──
-      const railGrad = isVertical
-        ? ctx.createLinearGradient(sx + 2, 0, sx + 6, 0)
-        : ctx.createLinearGradient(0, sy + 2, 0, sy + 6);
-      railGrad.addColorStop(0, '#5a5648');
-      railGrad.addColorStop(1, '#3a3830');
-      ctx.fillStyle = railGrad;
+      ctx.fillStyle = isVertical ? railVGrad : railHGrad;
       if (isVertical) {
         ctx.fillRect(sx + 2, sy + 2, 4, TILE_SIZE - 4);
         ctx.fillRect(sx + TILE_SIZE - 6, sy + 2, 4, TILE_SIZE - 4);
@@ -1276,30 +1687,28 @@ export class GameRenderer {
         ctx.fillRect(sx + 2, sy + TILE_SIZE - 7, TILE_SIZE - 4, 1);
       }
 
-      // ── Animated belt cleats (perpendicular ridges) ──
+      // ── Animated belt cleats (perpendicular ridges) — batched into single path ──
       const speed = 1.8;
       const cleatSpacing = TILE_SIZE / 3;
       const animOff = ((this.frameCount * speed) % cleatSpacing + cleatSpacing) % cleatSpacing;
       ctx.strokeStyle = 'rgba(50,46,38,0.75)';
       ctx.lineWidth = 1.5;
       ctx.lineCap = 'round';
+      ctx.beginPath();
       for (let i = -1; i <= 3; i++) {
         if (isVertical) {
           const cy = sy + ((i * cleatSpacing + animOff * (dy > 0 ? 1 : -1) + TILE_SIZE * 2) % TILE_SIZE + TILE_SIZE) % TILE_SIZE;
           if (cy < sy + 2 || cy > sy + TILE_SIZE - 2) continue;
-          ctx.beginPath();
           ctx.moveTo(sx + 6, cy);
           ctx.lineTo(sx + TILE_SIZE - 6, cy);
-          ctx.stroke();
         } else {
           const cx2 = sx + ((i * cleatSpacing + animOff * (dx > 0 ? 1 : -1) + TILE_SIZE * 2) % TILE_SIZE + TILE_SIZE) % TILE_SIZE;
           if (cx2 < sx + 2 || cx2 > sx + TILE_SIZE - 2) continue;
-          ctx.beginPath();
           ctx.moveTo(cx2, sy + 6);
           ctx.lineTo(cx2, sy + TILE_SIZE - 6);
-          ctx.stroke();
         }
       }
+      ctx.stroke();
       ctx.lineCap = 'butt';
 
       // ── Direction arrow painted on belt ──
@@ -1318,14 +1727,15 @@ export class GameRenderer {
       ctx.restore();
 
       // ── Items on belt (3D box style) ──
-      for (const seg of segments) {
+      for (let si = 0; si < segments.length; si++) {
+        const seg = segments[si];
         if (!seg.itemId) continue;
         const progress = seg.progress;
         const ix = sx + TILE_SIZE / 2 + dx * (progress - 0.5) * TILE_SIZE;
         const iy = sy + TILE_SIZE / 2 + dy * (progress - 0.5) * TILE_SIZE;
         const itemColor = RESOURCE_COLORS[seg.itemId] || '#aaa888';
 
-        // Parse color components
+        // Parse color components once
         const rI = parseInt(itemColor.slice(1, 3), 16);
         const gI = parseInt(itemColor.slice(3, 5), 16);
         const bI = parseInt(itemColor.slice(5, 7), 16);
@@ -1337,22 +1747,30 @@ export class GameRenderer {
         ctx.fill();
 
         // Box top face (lighter)
-        ctx.fillStyle = `rgb(${Math.min(255, rI + 35)},${Math.min(255, gI + 35)},${Math.min(255, bI + 35)})`;
+        const rTop = Math.min(255, rI + 35);
+        const gTop = Math.min(255, gI + 35);
+        const bTop = Math.min(255, bI + 35);
+        ctx.fillStyle = `rgb(${rTop},${gTop},${bTop})`;
         ctx.fillRect(ix - 4.5, iy - 6, 9, 7);
 
         // Box front face (darker, slight 3D illusion)
-        ctx.fillStyle = `rgb(${Math.max(0, rI - 35)},${Math.max(0, gI - 35)},${Math.max(0, bI - 35)})`;
+        const rBot = Math.max(0, rI - 35);
+        const gBot = Math.max(0, gI - 35);
+        const bBot = Math.max(0, bI - 35);
+        ctx.fillStyle = `rgb(${rBot},${gBot},${bBot})`;
         ctx.fillRect(ix - 4.5, iy + 1, 9, 2.5);
 
         // Box right face (mid tone)
-        ctx.fillStyle = `rgb(${Math.max(0, rI - 15)},${Math.max(0, gI - 15)},${Math.max(0, bI - 15)})`;
+        const rMid = Math.max(0, rI - 15);
+        const gMid = Math.max(0, gI - 15);
+        const bMid = Math.max(0, bI - 15);
+        ctx.fillStyle = `rgb(${rMid},${gMid},${bMid})`;
         ctx.fillRect(ix + 4.5, iy - 4, 2, 5);
 
-        // Top highlight
+        // Top highlight + item border — reuse dark color
         ctx.fillStyle = 'rgba(255,255,255,0.28)';
         ctx.fillRect(ix - 3.5, iy - 5, 4, 1.5);
 
-        // Item border
         ctx.strokeStyle = `rgba(${Math.max(0, rI - 50)},${Math.max(0, gI - 50)},${Math.max(0, bI - 50)},0.7)`;
         ctx.lineWidth = 0.5;
         ctx.strokeRect(ix - 4.5, iy - 6, 9, 7);
@@ -1364,7 +1782,6 @@ export class GameRenderer {
     const x = enemy.x * TILE_SIZE;
     const y = enemy.y * TILE_SIZE;
     const size = enemy.type === 'behemoth' ? 14 : enemy.type === 'worm' ? 12 : 8;
-    const evolution = enemy.evolution;
 
     // Track hit flash
     const flashFrames = this.enemyHitFlash.get(enemy.id) || 0;
@@ -1377,55 +1794,36 @@ export class GameRenderer {
       const dmg = Math.ceil(prevHp - enemy.health);
       this.enemyHitFlash.set(enemy.id, 6);
       this.damageNumbers.push({ x, y: y - size - 5, value: dmg, life: 40, color: '#ff4444' });
+      // Spawn hit particles
+      this.particleEffects.spawnSparks(x + TILE_SIZE / 2, y + TILE_SIZE / 2, Math.min(8, dmg));
+      // Small screen shake for hits
+      this.screenEffects.triggerShake(2, 4);
+      if (enemy.health <= 0) {
+        this.particleEffects.spawnExplosion(x + TILE_SIZE / 2, y + TILE_SIZE / 2, 4);
+        // Screen effects for big kills
+        const explosionSize = enemy.type === 'leviathan' ? 12 : enemy.type === 'behemoth' ? 8 : 4;
+        this.screenEffects.triggerShake(explosionSize, 8 + explosionSize);
+        this.screenEffects.triggerShockwave(x + TILE_SIZE / 2, y + TILE_SIZE / 2, 30 + explosionSize * 3);
+        if (enemy.type === 'leviathan' || enemy.type === 'behemoth') {
+          this.screenEffects.triggerFlash('255,150,50', 0.15);
+        }
+      }
     }
     this.prevEnemyHealth.set(enemy.id, enemy.health);
 
-    // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath();
-    ctx.ellipse(x, y + size + 2, size * 0.7, size * 0.25, 0, 0, Math.PI * 2);
-    ctx.fill();
+    // Draw pre-generated enemy sprite
+    const sprite = getEnemySprite(enemy.type);
+    if (sprite) {
+      // Scale based on type
+      const scale = enemy.type === 'behemoth' ? 1.5 : enemy.type === 'worm' ? 1.3 : 1.0;
+      const sw = TILE_SIZE * scale;
+      const sh = TILE_SIZE * scale;
+      ctx.drawImage(sprite, x - (sw - TILE_SIZE) / 2, y - (sh - TILE_SIZE) / 2, sw, sh);
+    }
 
-    // Body color with evolution gradient
-    const r = Math.floor(60 + evolution * 120);
-    const g = Math.floor(15 + evolution * 25);
-    const b = Math.floor(15 + evolution * 15);
-    const bodyColor = `rgb(${r},${g},${b})`;
-    const darkColor = `rgb(${Math.floor(r * 0.6)},${Math.floor(g * 0.6)},${Math.floor(b * 0.6)})`;
-
-    if (enemy.type === 'spitter') {
-      // Body
-      ctx.fillStyle = bodyColor;
-      ctx.beginPath();
-      ctx.ellipse(x, y, size, size * 0.8, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // Belly
-      ctx.fillStyle = `rgb(${r + 40},${g + 20},${b})`;
-      ctx.beginPath();
-      ctx.ellipse(x, y + 2, size * 0.6, size * 0.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // Mouth
-      ctx.fillStyle = '#ff4400';
-      ctx.beginPath();
-      ctx.ellipse(x, y + size * 0.3, size * 0.35, size * 0.25, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // Eyes
-      ctx.fillStyle = '#ff0';
-      ctx.beginPath();
-      ctx.ellipse(x - 3, y - 3, 2, 1.5, -0.2, 0, Math.PI * 2);
-      ctx.ellipse(x + 3, y - 3, 2, 1.5, 0.2, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (enemy.type === 'worm') {
-      // Body segments
-      for (let i = 3; i >= 0; i--) {
-        const segSize = size * (1 - i * 0.15);
-        const wobble = Math.sin(this.frameCount * 0.04 + i * 0.8) * 2;
-        ctx.fillStyle = i === 0 ? bodyColor : darkColor;
-        ctx.beginPath();
-        ctx.ellipse(x + wobble, y - i * 4, segSize, segSize * 0.7, 0, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      // Tentacles
+    // Animated overlays for worm (tentacles)
+    if (enemy.type === 'worm') {
+      const darkColor = GameRenderer._getEnemyDarkColor('worm', enemy.evolution);
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * Math.PI * 2 + this.frameCount * 0.015;
         const len = size * 1.2 + Math.sin(this.frameCount * 0.05 + i) * 3;
@@ -1442,19 +1840,11 @@ export class GameRenderer {
         ctx.stroke();
         ctx.lineCap = 'butt';
       }
-    } else {
-      // Biter/behemoth
-      ctx.fillStyle = bodyColor;
-      ctx.beginPath();
-      ctx.ellipse(x, y, size, size * 0.85, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // Shell ridges
-      ctx.strokeStyle = darkColor;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(x, y - 2, size * 0.6, Math.PI * 0.2, Math.PI * 0.8);
-      ctx.stroke();
-      // Legs with animation
+    }
+
+    // Animated biter/behemoth legs
+    if (enemy.type === 'biter' || enemy.type === 'behemoth') {
+      const darkColor = GameRenderer._getEnemyDarkColor(enemy.type, enemy.evolution);
       const legAnim = Math.sin(this.frameCount * 0.12 + enemy.id.charCodeAt(0)) * 3;
       ctx.strokeStyle = darkColor;
       ctx.lineWidth = 2;
@@ -1465,14 +1855,14 @@ export class GameRenderer {
         ctx.moveTo(x + i * size * 0.5, y + size * 0.2);
         ctx.lineTo(x + i * size * 0.9 + legOffset, y + size + 2);
         ctx.stroke();
-        // Mid leg
         ctx.beginPath();
         ctx.moveTo(x + i * size * 0.3, y + size * 0.3);
         ctx.lineTo(x + i * size * 0.7 - legOffset, y + size + 1);
         ctx.stroke();
       }
       ctx.lineCap = 'butt';
-      // Mandibles
+
+      // Mandibles animation
       ctx.strokeStyle = '#ff3300';
       ctx.lineWidth = 2;
       const mandibleOpen = enemy.state === 'attacking' ? 4 : 1;
@@ -1484,38 +1874,125 @@ export class GameRenderer {
       ctx.moveTo(x + 3, y + size * 0.3);
       ctx.lineTo(x + 5, y + size * 0.3 + mandibleOpen);
       ctx.stroke();
-      // Eyes with glow
-      ctx.fillStyle = '#ff2200';
-      ctx.beginPath();
-      ctx.arc(x - 3, y - 2, 2.5, 0, Math.PI * 2);
-      ctx.arc(x + 3, y - 2, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#ff8800';
-      ctx.beginPath();
-      ctx.arc(x - 3, y - 2, 1, 0, Math.PI * 2);
-      ctx.arc(x + 3, y - 2, 1, 0, Math.PI * 2);
-      ctx.fill();
     }
 
-    // Health bar
+    // Health bar — fillRect (no roundRect overhead)
     if (enemy.health < enemy.maxHealth) {
       const hp = enemy.health / enemy.maxHealth;
       const barW = size * 2;
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.beginPath();
-      ctx.roundRect(x - barW / 2, y - size - 10, barW, 5, 2);
-      ctx.fill();
+      ctx.fillRect(x - barW / 2, y - size - 10, barW, 5);
       ctx.fillStyle = hp > 0.5 ? '#22c55e' : hp > 0.25 ? '#f59e0b' : '#ef4444';
-      ctx.beginPath();
-      ctx.roundRect(x - barW / 2 + 0.5, y - size - 9.5, (barW - 1) * hp, 4, 1.5);
-      ctx.fill();
+      ctx.fillRect(x - barW / 2 + 0.5, y - size - 9.5, (barW - 1) * hp, 4);
     }
 
-    // Attack flash
+    // Attack flash — type-specific effects
     if (enemy.state === 'attacking') {
-      ctx.fillStyle = 'rgba(255,50,0,0.2)';
+      const attackPulse = Math.sin(this.frameCount * 0.15) * 0.15 + 0.2;
+      switch (enemy.type) {
+        case 'spitter': {
+          // Acid spit projectile
+          const spitProgress = (this.frameCount % 12) / 12;
+          const spitX = x + Math.cos(this.frameCount * 0.1) * (size + 4) * spitProgress;
+          const spitY = y + Math.sin(this.frameCount * 0.1) * (size + 4) * spitProgress;
+          ctx.fillStyle = `rgba(120,255,50,${0.8 - spitProgress * 0.6})`;
+          ctx.beginPath();
+          ctx.arc(spitX, spitY, 3 - spitProgress * 2, 0, Math.PI * 2);
+          ctx.fill();
+          // Acid splash
+          ctx.fillStyle = 'rgba(120,255,50,0.15)';
+          ctx.beginPath();
+          ctx.arc(x, y, size + 4, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        }
+        case 'worm': {
+          // Acid spray in cone
+          const sprayAngle = Math.atan2(_state.player.y - enemy.y, _state.player.x - enemy.x);
+          ctx.fillStyle = `rgba(120,255,50,${attackPulse})`;
+          for (let i = 0; i < 5; i++) {
+            const a = sprayAngle + (Math.random() - 0.5) * 0.8;
+            const d = size + Math.random() * 10;
+            ctx.beginPath();
+            ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          break;
+        }
+        case 'behemoth': {
+          // Ground pound shockwave
+          const shockR = size + 8 + Math.sin(this.frameCount * 0.1) * 4;
+          ctx.strokeStyle = `rgba(255,100,0,${attackPulse * 0.4})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(x, y, shockR, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillStyle = `rgba(255,80,0,${attackPulse * 0.15})`;
+          ctx.beginPath();
+          ctx.arc(x, y, shockR, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        }
+        case 'destroyer': {
+          // Laser beam from above
+          const laserAlpha = Math.sin(this.frameCount * 0.2) * 0.3 + 0.4;
+          ctx.strokeStyle = `rgba(255,50,0,${laserAlpha})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(x, y - 10);
+          ctx.lineTo(x, y + 10);
+          ctx.stroke();
+          ctx.fillStyle = `rgba(255,80,0,${laserAlpha * 0.3})`;
+          ctx.beginPath();
+          ctx.arc(x, y, 6, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        }
+        case 'leviathan': {
+          // Massive ground slam — radial cracks
+          const slamR = size + 12;
+          ctx.strokeStyle = `rgba(200,50,200,${attackPulse * 0.5})`;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(x, y, slamR, 0, Math.PI * 2);
+          ctx.stroke();
+          // Crack lines
+          for (let i = 0; i < 8; i++) {
+            const a = i * Math.PI / 4;
+            ctx.strokeStyle = `rgba(150,30,150,${attackPulse * 0.3})`;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(x + Math.cos(a) * size, y + Math.sin(a) * size);
+            ctx.lineTo(x + Math.cos(a) * slamR, y + Math.sin(a) * slamR);
+            ctx.stroke();
+          }
+          break;
+        }
+        case 'drone': {
+          // Quick zip attack trail
+          ctx.fillStyle = `rgba(255,255,0,${attackPulse * 0.4})`;
+          ctx.beginPath();
+          ctx.arc(x, y, size + 3, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        }
+        default: {
+          // Basic bite flash
+          ctx.fillStyle = `rgba(255,50,0,${attackPulse})`;
+          ctx.beginPath();
+          ctx.arc(x, y, size + 6, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        }
+      }
+    }
+
+    // Enemy type-specific shadow
+    if (enemy.type === 'destroyer' || enemy.type === 'drone') {
+      // Flying enemies cast shadow below
+      ctx.fillStyle = 'rgba(0,0,0,0.2)';
       ctx.beginPath();
-      ctx.arc(x, y, size + 6, 0, Math.PI * 2);
+      ctx.ellipse(x, y + 8, size * 0.8, 3, 0, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -1533,117 +2010,43 @@ export class GameRenderer {
     const y = npc.y * TILE_SIZE;
     const bob = Math.sin(this.frameCount * 0.07 + npc.id.charCodeAt(0)) * 1;
 
-    // Clothing colors bob type
-    const jacketColors: Record<string, string> = {
-      worker: '#2a3c2a', scout: '#1e3028', trader: '#3a2810', guard: '#2a1a1a', settler: '#2c2a3a',
-    };
-    const accentColors: Record<string, string> = {
-      worker: '#c87020', scout: '#20a840', trader: '#d4a017', guard: '#cc2020', settler: '#7a60cc',
-    };
-    const jacket = jacketColors[npc.type] || '#2a3a2a';
-    const accent = accentColors[npc.type] || '#c87020';
+    // Accent color for UI elements — static lookup, NO object allocation
+    const accent = GameRenderer._NPC_ACCENTS[npc.type] || '#c87020';
 
-    // Ground shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.28)';
-    ctx.beginPath();
-    ctx.ellipse(x, y + 11, 6.5, 2.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Legs
-    ctx.fillStyle = '#181c14';
-    ctx.fillRect(x - 4, y + 4 + bob, 3.5, 6);
-    ctx.fillRect(x + 0.5, y + 4 + bob, 3.5, 6);
-
-    // Body
-    const bGrad = ctx.createLinearGradient(x - 6, y - 3, x + 6, y + 5);
-    bGrad.addColorStop(0, lightenColorUtil(jacket, 18));
-    bGrad.addColorStop(1, jacket);
-    ctx.fillStyle = bGrad;
-    ctx.beginPath();
-    ctx.roundRect(x - 6, y - 3 + bob, 12, 9, 2);
-    ctx.fill();
-
-    // Accent stripe
-    ctx.fillStyle = accent + 'aa';
-    ctx.fillRect(x - 6, y - 0.5 + bob, 12, 2);
-
-    // Head
-    ctx.fillStyle = '#daa870';
-    ctx.beginPath();
-    ctx.arc(x, y - 10 + bob, 5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Hat / helmet based on type
-    if (npc.type === 'worker' || npc.type === 'guard') {
-      ctx.fillStyle = npc.type === 'guard' ? '#880010' : '#cc8010';
-      ctx.beginPath();
-      ctx.ellipse(x, y - 13.5 + bob, 6.5, 3.2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = npc.type === 'guard' ? '#aa0020' : '#ee9020';
-      ctx.beginPath();
-      ctx.ellipse(x, y - 14.5 + bob, 5, 2, 0, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (npc.type === 'scout') {
-      ctx.fillStyle = '#1a3818';
-      ctx.beginPath();
-      ctx.ellipse(x, y - 13 + bob, 6, 2, 0, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (npc.type === 'trader') {
-      ctx.fillStyle = '#6a4010';
-      ctx.fillRect(x - 3.5, y - 16 + bob, 7, 6);
-      ctx.fillRect(x - 5, y - 11 + bob, 10, 1.5);
+    // Draw pre-generated NPC sprite
+    const sprite = getNPCSprite(npc.type);
+    if (sprite) {
+      ctx.drawImage(sprite, x + bob * 0.3, y + bob, TILE_SIZE, TILE_SIZE);
     }
 
-    // Eyes
-    ctx.fillStyle = '#1a1a1a';
-    ctx.beginPath();
-    ctx.arc(x - 1.8, y - 10.5 + bob, 1.1, 0, Math.PI * 2);
-    ctx.arc(x + 1.8, y - 10.5 + bob, 1.1, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Name tag
+    // Name tag — simple fillRect background instead of roundRect
     if (state.camera.zoom > 1) {
       ctx.font = 'bold 8px system-ui, sans-serif';
       ctx.textAlign = 'center';
       const nameWidth = ctx.measureText(npc.name).width + 6;
       ctx.fillStyle = 'rgba(0,0,0,0.65)';
-      ctx.beginPath();
-      ctx.roundRect(x - nameWidth / 2, y - 24 + bob, nameWidth, 10, 3);
-      ctx.fill();
+      ctx.fillRect(x - nameWidth / 2, y - 24 + bob, nameWidth, 10);
       ctx.fillStyle = accent;
       ctx.fillText(npc.name, x, y - 17 + bob);
+      ctx.textAlign = 'left';
     }
 
-    // HP bar if damaged
+    // HP bar if damaged — fillRect
     if (npc.health < npc.maxHealth) {
       const hp = npc.health / npc.maxHealth;
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.beginPath();
-      ctx.roundRect(x - 12, y - 28 + bob, 24, 3.5, 1.5);
-      ctx.fill();
+      ctx.fillRect(x - 12, y - 28 + bob, 24, 3.5);
       ctx.fillStyle = hp > 0.5 ? '#22c55e' : '#ef4444';
-      ctx.beginPath();
-      ctx.roundRect(x - 11.5, y - 27.5 + bob, 23 * hp, 2.5, 1);
-      ctx.fill();
+      ctx.fillRect(x - 11.5, y - 27.5 + bob, 23 * hp, 2.5);
     }
 
-    // Show carried item as a small colored box
+    // Show carried item
     if (npc.inventory && npc.inventory.length > 0) {
       const item = npc.inventory[0];
-      const itemColors: Record<string, string> = {
-        iron: '#8a9ab0', copper: '#c86a2a', coal: '#2a2a30', stone: '#8a8070',
-        iron_plate: '#7090b0', copper_plate: '#c87040', gear: '#707080',
-        circuit: '#20a840', wood: '#7a5028', science_red: '#dd2020',
-        science_green: '#20bb40', science_blue: '#2060dd',
-      };
-      const col = itemColors[item.itemId] || '#aaa';
-      ctx.fillStyle = col;
-      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.roundRect(x + 4, y - 8 + bob, 7, 7, 1.5);
-      ctx.fill();
-      ctx.stroke();
+      const itemIcon = getItemIcon(item.itemId);
+      if (itemIcon) {
+        ctx.drawImage(itemIcon, x + 5, y - 8 + bob, 8, 8);
+      }
     }
   }
 
@@ -1651,110 +2054,110 @@ export class GameRenderer {
     const { player } = state;
     const x = player.x * TILE_SIZE;
     const y = player.y * TILE_SIZE;
-    const bob = Math.sin(this.frameCount * 0.12) * 1.2;
-    // Player ambient glow — warm hard-hat light
-    const glowR = 22;
+
+    // Walking animation
+    const isMoving = state.player.isMoving || (
+      Math.abs(state.player.x - (state.player as any).prevX) > 0.01 ||
+      Math.abs(state.player.y - (state.player as any).prevY) > 0.01
+    );
+    const walkCycle = isMoving ? Math.sin(this.frameCount * 0.2) : 0;
+    const bob = isMoving ? Math.abs(Math.sin(this.frameCount * 0.2)) * 1.8 : 0;
+    const lean = isMoving ? Math.sin(this.frameCount * 0.2) * 0.03 : 0;
+
+    // Player ambient glow — brighter when moving
+    const glowR = isMoving ? 26 : 22;
+    const glowAlpha = isMoving ? 0.28 : 0.22;
     const playerGlow = ctx.createRadialGradient(x, y, 0, x, y, glowR);
-    playerGlow.addColorStop(0, 'rgba(255,210,100,0.22)');
-    playerGlow.addColorStop(0.5, 'rgba(255,200,80,0.10)');
+    playerGlow.addColorStop(0, `rgba(255,210,100,${glowAlpha})`);
+    playerGlow.addColorStop(0.5, `rgba(255,200,80,${glowAlpha * 0.45})`);
     playerGlow.addColorStop(1, 'rgba(255,200,80,0)');
     ctx.fillStyle = playerGlow;
     ctx.beginPath();
     ctx.arc(x, y, glowR, 0, Math.PI * 2);
     ctx.fill();
 
-    // Ground shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath();
-    ctx.ellipse(x, y + 13, 8, 3.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#1e2818';
-    ctx.fillRect(x - 5, y + 4 + bob, 4, 7);
-    ctx.fillRect(x + 1, y + 4 + bob, 4, 7);
-    // Boot tips
-    ctx.fillStyle = '#111';
-    ctx.fillRect(x - 5, y + 10 + bob, 5, 2);
-    ctx.fillRect(x + 1, y + 10 + bob, 5, 2);
-
-    // Body — dark grey work jacket
-    const bodyGrad = ctx.createLinearGradient(x - 7, y - 4, x + 7, y + 6);
-    bodyGrad.addColorStop(0, '#3a3c38');
-    bodyGrad.addColorStop(1, '#222420');
-    ctx.fillStyle = bodyGrad;
-    ctx.beginPath();
-    ctx.roundRect(x - 7, y - 4 + bob, 14, 10, 2);
-    ctx.fill();
-
-    // Hi-vis orange vest stripe
-    ctx.fillStyle = 'rgba(200,100,20,0.75)';
-    ctx.fillRect(x - 7, y - 1 + bob, 14, 2);
-    ctx.fillRect(x - 1, y - 4 + bob, 2, 10); // vertical stripe
-
-    // Belt
-    ctx.fillStyle = '#3a2808';
-    ctx.fillRect(x - 7, y + 4 + bob, 14, 2);
-    ctx.fillStyle = '#c89040';
-    ctx.fillRect(x - 1.5, y + 4 + bob, 3, 2); // buckle
-
-    // Head
-    ctx.fillStyle = '#e0b890';
-    ctx.beginPath();
-    ctx.arc(x, y - 12 + bob, 6, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Hard hat
-    const dir = DIR_OFFSETS[player.direction];
-    ctx.fillStyle = '#d88010';
-    ctx.beginPath();
-    ctx.ellipse(x, y - 15.5 + bob, 7.5, 4, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#f0a020';
-    ctx.beginPath();
-    ctx.ellipse(x, y - 17 + bob, 6, 2.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // Hat brim
-    ctx.fillStyle = '#c07010';
-    ctx.beginPath();
-    ctx.ellipse(x, y - 14 + bob, 8.5, 2, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Face / eyes
-    const eyeOffX = dir ? dir.dx * 1.8 : 0;
-    const eyeOffY = dir ? dir.dy * 1.2 : 0;
-    ctx.fillStyle = '#1a1a1a';
-    ctx.beginPath();
-    ctx.arc(x - 2.2 + eyeOffX, y - 12.5 + bob + eyeOffY, 1.3, 0, Math.PI * 2);
-    ctx.arc(x + 2.2 + eyeOffX, y - 12.5 + bob + eyeOffY, 1.3, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Arm + tool
-    if (dir) {
-      ctx.fillStyle = '#3a3c38';
+    // Draw pre-generated player sprite with lean
+    const skinColor = player.cosmetics?.skinColor || '#e0b890';
+    const sprite = getPlayerSprite(skinColor);
+    if (sprite) {
       ctx.save();
-      ctx.translate(x + dir.dx * 10, y - 2 + dir.dy * 10 + bob);
-      ctx.rotate(Math.atan2(dir.dy, dir.dx));
-      // Arm
-      ctx.fillRect(-8, -2, 8, 3);
-      // Tool head (pickaxe/wrench)
-      ctx.fillStyle = '#999';
-      ctx.fillRect(1, -3.5, 6, 5);
-      ctx.fillStyle = '#c89040';
-      ctx.fillRect(1, -2, 6, 2);
+      ctx.translate(x, y + bob);
+      ctx.rotate(lean);
+      ctx.drawImage(sprite, -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
       ctx.restore();
     }
 
-    // Health bar
+    // Walking legs — small dark marks at bottom
+    if (isMoving) {
+      ctx.fillStyle = '#2a2a28';
+      const legOffset = Math.sin(this.frameCount * 0.25) * 3;
+      ctx.fillRect(x - 3 + legOffset, y + 6 + bob, 2.5, 4);
+      ctx.fillRect(x + 1 - legOffset, y + 6 + bob, 2.5, 4);
+    }
+
+    // Arm + tool (direction-aware, animated swing)
+    const dir = DIR_OFFSETS[player.direction];
+    if (dir) {
+      const armAngle = Math.atan2(dir.dy, dir.dx);
+      const armSwing = isMoving ? Math.sin(this.frameCount * 0.25) * 0.3 : 0;
+
+      ctx.save();
+      ctx.translate(x + dir.dx * 10, y - 2 + dir.dy * 10 + bob);
+      ctx.rotate(armAngle + armSwing);
+
+      // Upper arm
+      ctx.fillStyle = '#3a3c38';
+      ctx.fillRect(-8, -2, 8, 3);
+
+      // Tool head — dynamic based on nearby building
+      const toolX = 1;
+      const toolY = -3.5;
+
+      // Check if near a building to show mining effect — early exit, max 20 checks
+      let isNearBuilding = false;
+      let checkCount = 0;
+      for (const [, b] of state.buildings) {
+        const bdx = b.x - player.x;
+        const bdy = b.y - player.y;
+        if (Math.abs(bdx) < 2 && Math.abs(bdy) < 2) {
+          isNearBuilding = true;
+          break;
+        }
+        if (++checkCount >= 20) break; // Stop checking after 20 buildings (most are far away)
+      }
+
+      if (isNearBuilding && isMoving) {
+        // Mining laser effect
+        ctx.strokeStyle = '#ff6600';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(toolX, toolY);
+        ctx.lineTo(toolX + 12, toolY);
+        ctx.stroke();
+        // Glow at tip
+        ctx.fillStyle = 'rgba(255,150,50,0.5)';
+        ctx.beginPath();
+        ctx.arc(toolX + 12, toolY, 3, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Normal tool
+        ctx.fillStyle = '#999';
+        ctx.fillRect(toolX, toolY, 6, 5);
+        ctx.fillStyle = '#c89040';
+        ctx.fillRect(toolX, toolY + 1.5, 6, 2);
+      }
+
+      ctx.restore();
+    }
+
+    // Health bar — fillRect
     const hp = player.health / player.maxHealth;
     const barW = 28;
     ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    ctx.beginPath();
-    ctx.roundRect(x - barW / 2, y - 23 + bob, barW, 4, 1.5);
-    ctx.fill();
+    ctx.fillRect(x - barW / 2, y - 23 + bob, barW, 4);
     const hpColor = hp > 0.5 ? '#22c55e' : hp > 0.25 ? '#f59e0b' : '#ef4444';
     ctx.fillStyle = hpColor;
-    ctx.beginPath();
-    ctx.roundRect(x - barW / 2 + 0.5, y - 22.5 + bob, (barW - 1) * hp, 3, 1);
-    ctx.fill();
+    ctx.fillRect(x - barW / 2 + 0.5, y - 22.5 + bob, (barW - 1) * hp, 3);
 
     // Reach circle
     ctx.strokeStyle = 'rgba(255,255,255,0.05)';
@@ -1792,10 +2195,20 @@ export class GameRenderer {
     }
     canPlace = canPlace && this.ghostCanAfford;
 
+    // Pulsing animation
+    const pulse = Math.sin(this.frameCount * 0.08) * 0.08 + 0.52;
+
     ctx.save();
-    ctx.globalAlpha = 0.52;
+    ctx.globalAlpha = pulse;
     if (canPlace) {
-      // Valid placement: blue-green tint
+      // Valid placement: blue-green tint with glow
+      ctx.fillStyle = 'rgba(80,220,130,0.35)';
+      // Pulsing glow
+      const glow = ctx.createRadialGradient(sx + sw / 2, sy + sh / 2, 0, sx + sw / 2, sy + sh / 2, Math.max(sw, sh) * 0.8);
+      glow.addColorStop(0, 'rgba(80,220,130,0.15)');
+      glow.addColorStop(1, 'rgba(80,220,130,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(sx - 10, sy - 10, sw + 20, sh + 20);
       ctx.fillStyle = 'rgba(80,220,130,0.35)';
     } else {
       // Invalid: red tint
@@ -1805,12 +2218,20 @@ export class GameRenderer {
     ctx.roundRect(sx, sy, sw, sh, 2);
     ctx.fill();
 
-    // Outline
+    // Show building sprite preview at low opacity
+    const ghostSprite = getBuildingSprite(this.ghostBuilding);
+    if (ghostSprite) {
+      ctx.globalAlpha = 0.35;
+      ctx.drawImage(ghostSprite, sx, sy, sw, sh);
+      ctx.globalAlpha = pulse;
+    }
+
+    // Outline — fillRect + strokeRect (no roundRect)
     ctx.strokeStyle = canPlace ? 'rgba(80,220,130,0.85)' : 'rgba(255,80,80,0.85)';
     ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(sx + 0.75, sy + 0.75, sw - 1.5, sh - 1.5, 2);
-    ctx.stroke();
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(sx + 0.75, sy + 0.75, sw - 1.5, sh - 1.5);
+    ctx.setLineDash([]);
 
     // Show direction arrow
     const dir = DIR_OFFSETS[this.ghostDirection as Direction];
@@ -1829,6 +2250,13 @@ export class GameRenderer {
       ctx.fill();
       ctx.restore();
     }
+
+    // Show building name
+    ctx.font = 'bold 9px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = canPlace ? 'rgba(180,255,200,0.8)' : 'rgba(255,150,150,0.8)';
+    ctx.fillText(this.ghostBuilding.replace(/_/g, ' ').toUpperCase(), sx + sw / 2, sy - 8);
+    ctx.textAlign = 'left';
 
     ctx.globalAlpha = 1;
     ctx.restore();
@@ -1909,6 +2337,26 @@ export class GameRenderer {
     ctx.globalAlpha = 1;
   }
 
+  // Pre-computed lit types as Set for O(1) lookup
+  private static readonly LIT_TYPES = new Set([
+    'furnace', 'boiler', 'lab', 'radar', 'steam_engine', 'assembler',
+    'refinery', 'chemical_plant', 'tesla_coil', 'laser_turret', 'roboport', 'centrifuge'
+  ]);
+  // Pre-computed light config: [radius, r, g, b, alpha]
+  private static readonly LIGHT_CFG: Record<string, [number, number, number, number, number]> = {
+    furnace: [100, 0, 0, 0, 0.75],
+    steam_engine: [90, 0, 0, 0, 0.55],
+    tesla_coil: [80, 80, 40, 160, 0.55],
+    laser_turret: [65, 0, 80, 120, 0.55],
+    centrifuge: [65, 20, 80, 20, 0.55],
+    roboport: [65, 20, 60, 80, 0.55],
+    lab: [65, 0, 0, 0, 0.6],
+  };
+  private static readonly DEFAULT_LIGHT: [number, number, number, number, number] = [65, 0, 0, 0, 0.55];
+  private static readonly _NPC_ACCENTS: Record<string, string> = {
+    worker: '#c87020', scout: '#20a840', trader: '#d4a017', guard: '#cc2020', settler: '#7a60cc',
+  };
+
   private renderNightLighting(state: GameState, dayFactor: number) {
     const { canvas, lightCanvas, lightCtx } = this;
     lightCanvas.width = canvas.width;
@@ -1933,20 +2381,26 @@ export class GameRenderer {
     lightCtx.fillStyle = playerLight;
     lightCtx.fillRect(0, 0, lightCanvas.width, lightCanvas.height);
 
-    // Building lights — more sources, larger radius
+    // Building lights — single gradient per visible active building
+    const zoom = state.camera.zoom;
+    const hw = canvas.width / 2;
+    const hh = canvas.height / 2;
+    const camX = state.camera.x;
+    const camY = state.camera.y;
     for (const [, building] of state.buildings) {
-      const litTypes = ['furnace', 'boiler', 'lab', 'radar', 'steam_engine', 'assembler', 'refinery', 'chemical_plant'];
-      if (!litTypes.includes(building.type)) continue;
+      if (!GameRenderer.LIT_TYPES.has(building.type)) continue;
       if (!building.isActive) continue;
-      const bx = (building.x * TILE_SIZE - state.camera.x) * state.camera.zoom + canvas.width / 2;
-      const bob = (building.y * TILE_SIZE - state.camera.y) * state.camera.zoom + canvas.height / 2;
+      const bx = (building.x * TILE_SIZE - camX) * zoom + hw;
+      const bob = (building.y * TILE_SIZE - camY) * zoom + hh;
       if (bx < -150 || bx > canvas.width + 150 || bob < -150 || bob > canvas.height + 150) continue;
-      const radius = (building.type === 'furnace' ? 100 : building.type === 'steam_engine' ? 90 : 65) * state.camera.zoom;
+      const cfg = GameRenderer.LIGHT_CFG[building.type] || GameRenderer.DEFAULT_LIGHT;
+      const radius = cfg[0] * zoom;
       const light = lightCtx.createRadialGradient(bx, bob, 0, bx, bob, radius);
-      const alpha = building.type === 'furnace' ? '0.75' : building.type === 'lab' ? '0.6' : '0.55';
-      light.addColorStop(0, `rgba(0,0,0,${alpha})`);
-      light.addColorStop(0.5, `rgba(0,0,0,${parseFloat(alpha) * 0.4})`);
-      light.addColorStop(1, 'rgba(0,0,0,0)');
+      const alphaStr = cfg[5].toString();
+      const alphaHalf = (cfg[5] * 0.4).toFixed(2);
+      light.addColorStop(0, `rgba(${cfg[1]},${cfg[2]},${cfg[3]},${alphaStr})`);
+      light.addColorStop(0.5, `rgba(${cfg[1]},${cfg[2]},${cfg[3]},${alphaHalf})`);
+      light.addColorStop(1, `rgba(${cfg[1]},${cfg[2]},${cfg[3]},0)`);
       lightCtx.fillStyle = light;
       lightCtx.fillRect(bx - radius, bob - radius, radius * 2, radius * 2);
     }
@@ -1968,27 +2422,28 @@ export class GameRenderer {
       ctx.fillStyle = `rgba(80,120,180,${intensity})`;
       ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-      // Rain drops
+      // Rain drops — batched into single path (ONE stroke call for all drops)
       const dropCount = state.weather === 'storm' ? 150 : 60;
       ctx.strokeStyle = 'rgba(180,210,255,0.25)';
       ctx.lineWidth = 1;
       const windOffset = state.weather === 'storm' ? 4 : 1;
+      const cw = this.canvas.width;
+      const ch = this.canvas.height;
+      ctx.beginPath();
       for (let i = 0; i < dropCount; i++) {
-        const rx = (this.frameCount * 7.3 + i * 137.7) % this.canvas.width;
-        const ry = (this.frameCount * 13.1 + i * 251.3) % this.canvas.height;
-        ctx.beginPath();
+        const rx = (this.frameCount * 7.3 + i * 137.7) % cw;
+        const ry = (this.frameCount * 13.1 + i * 251.3) % ch;
         ctx.moveTo(rx, ry);
         ctx.lineTo(rx - windOffset, ry + 12);
-        ctx.stroke();
       }
+      ctx.stroke();
 
       // Lightning flash for storms
       if (state.weather === 'storm' && this.frameCount % 300 < 3) {
         ctx.fillStyle = 'rgba(200,220,255,0.15)';
-        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        ctx.fillRect(0, 0, cw, ch);
       }
     } else if (state.weather === 'fog') {
-      // Layered atmospheric fog — radial gradient from edges
       const w = this.canvas.width, h = this.canvas.height;
       const fogGrad = ctx.createRadialGradient(w / 2, h / 2, w * 0.1, w / 2, h / 2, w * 0.7);
       fogGrad.addColorStop(0, 'rgba(180,195,210,0)');
@@ -1996,13 +2451,12 @@ export class GameRenderer {
       fogGrad.addColorStop(1, 'rgba(180,195,210,0.22)');
       ctx.fillStyle = fogGrad;
       ctx.fillRect(0, 0, w, h);
-      // Subtle animated wisps using horizontal gradients
       const t = this.frameCount * 0.002;
       for (let i = 0; i < 3; i++) {
         const wispX = ((t * 40 + i * (w / 3)) % (w + 200)) - 100;
         const wispGrad = ctx.createLinearGradient(wispX - 150, 0, wispX + 150, 0);
         wispGrad.addColorStop(0, 'rgba(200,210,220,0)');
-        wispGrad.addColorStop(0.5, `rgba(200,210,220,${0.04 + Math.sin(t + i) * 0.01})`);
+        wispGrad.addColorStop(0.5, `rgba(200,210,220,${(0.04 + Math.sin(t + i) * 0.01).toFixed(3)})`);
         wispGrad.addColorStop(1, 'rgba(200,210,220,0)');
         ctx.fillStyle = wispGrad;
         ctx.fillRect(wispX - 150, h * 0.2 + i * h * 0.25, 300, h * 0.3);
@@ -2010,22 +2464,58 @@ export class GameRenderer {
     }
   }
 
+  // Cached vignette — static, only rebuild on resize
+  private _vignetteCanvas: HTMLCanvasElement | null = null;
+  private _vignetteW = 0;
+  private _vignetteH = 0;
+
   private renderVignette(ctx: CanvasRenderingContext2D) {
     const w = this.canvas.width;
     const h = this.canvas.height;
-    // Corner-focused vignette
-    const grad = ctx.createRadialGradient(w / 2, h / 2, w * 0.25, w / 2, h / 2, w * 0.75);
-    grad.addColorStop(0, 'rgba(0,0,0,0)');
-    grad.addColorStop(0.7, 'rgba(0,0,0,0.15)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.55)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, h);
-    // Subtle amber pollution haze at bottom
-    const hazeGrad = ctx.createLinearGradient(0, h * 0.75, 0, h);
-    hazeGrad.addColorStop(0, 'rgba(0,0,0,0)');
-    hazeGrad.addColorStop(1, 'rgba(30,15,0,0.12)');
-    ctx.fillStyle = hazeGrad;
-    ctx.fillRect(0, 0, w, h);
+    // Rebuild only on resize
+    if (!this._vignetteCanvas || this._vignetteW !== w || this._vignetteH !== h) {
+      if (!this._vignetteCanvas) {
+        this._vignetteCanvas = document.createElement('canvas');
+      }
+      this._vignetteCanvas.width = w;
+      this._vignetteCanvas.height = h;
+      const vc = this._vignetteCanvas.getContext('2d')!;
+      // Corner-focused vignette
+      const grad = vc.createRadialGradient(w / 2, h / 2, w * 0.25, w / 2, h / 2, w * 0.75);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(0.7, 'rgba(0,0,0,0.15)');
+      grad.addColorStop(1, 'rgba(0,0,0,0.55)');
+      vc.fillStyle = grad;
+      vc.fillRect(0, 0, w, h);
+      // Subtle amber pollution haze at bottom
+      const hazeGrad = vc.createLinearGradient(0, h * 0.75, 0, h);
+      hazeGrad.addColorStop(0, 'rgba(0,0,0,0)');
+      hazeGrad.addColorStop(1, 'rgba(30,15,0,0.12)');
+      vc.fillStyle = hazeGrad;
+      vc.fillRect(0, 0, w, h);
+      // Dawn/dusk warm glow on horizon
+      const horizonGrad = vc.createLinearGradient(0, 0, 0, h * 0.3);
+      horizonGrad.addColorStop(0, 'rgba(255,120,40,0.04)');
+      horizonGrad.addColorStop(1, 'rgba(255,120,40,0)');
+      vc.fillStyle = horizonGrad;
+      vc.fillRect(0, 0, w, h * 0.3);
+      this._vignetteW = w;
+      this._vignetteH = h;
+    }
+    ctx.drawImage(this._vignetteCanvas, 0, 0);
+  }
+
+  /** Returns 0..1 for dawn/dusk intensity. 0 = noon/midnight, 1 = sunrise/sunset peak. */
+  private getDawnDuskFactor(dayPhase: number): number {
+    // dayPhase: 0 = midnight, 0.25 = sunrise, 0.5 = noon, 0.75 = sunset
+    // Dawn: 0.15..0.35, peak at 0.25
+    // Dusk: 0.65..0.85, peak at 0.75
+    if (dayPhase > 0.15 && dayPhase < 0.35) {
+      return 1 - Math.abs(dayPhase - 0.25) / 0.1;
+    } else if (dayPhase > 0.65 && dayPhase < 0.85) {
+      return 1 - Math.abs(dayPhase - 0.75) / 0.1;
+    }
+    return 0;
   }
 }
 
