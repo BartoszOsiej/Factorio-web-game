@@ -84,7 +84,7 @@ function App() {
 
   const handleEngineReady = useCallback((engine: GameEngine) => {
     engineRef.current = engine;
-    (window as any).__gameState = engine.state;
+    (window as { __gameState?: GameState }).__gameState = engine.state;
     engine.onStateChange = (state) => {
       setGameState({ ...state });
       setNotifications([...engine.notifications]);

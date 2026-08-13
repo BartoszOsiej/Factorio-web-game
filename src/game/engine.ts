@@ -1,4 +1,4 @@
-import { GameState, Building } from './types';
+import { GameState, Building, Recipe } from './types';
 import { CHUNK_SIZE, TILE_SIZE, RESEARCH_TREE, DAY_LENGTH, RECIPES, MAX_PARTICLES, BUILDING_SIZES } from './constants';
 import { generateChunk, getChunkKey, initWorldSeed } from './world';
 import { GameRenderer } from './renderer';
@@ -323,16 +323,16 @@ export class GameEngine {
     let nearestDist = Infinity;
     for (const [, enemy] of this.state.enemies) {
       const d = Math.sqrt((enemy.x - player.x) ** 2 + (enemy.y - player.y) ** 2);
-      if (d < range && d < nearestDist) { nearestDist = d; nearest = enemy as any; }
+      if (d < range && d < nearestDist) { nearestDist = d; nearest = enemy; }
     }
     if (!nearest) return false;
     const milBonus = this.state.research.get('military')?.unlocked
       ? (this.state.research.get('military')!.effects.turretDamage || 1) : 1;
     const damage = 25 * milBonus;
-    (nearest as any).health -= damage;
+    nearest.health -= damage;
     spawnParticle(this.state, nearest.x * TILE_SIZE, nearest.y * TILE_SIZE, 'spark', '#ffaa00');
-    if ((nearest as any).health <= 0) {
-      this.state.enemies.delete((nearest as any).id);
+    if (nearest.health <= 0) {
+      this.state.enemies.delete(nearest.id);
       this.state.statistics.enemiesKilled++;
       grantXPToPlayer(this.state, 8);
       spawnParticle(this.state, nearest.x * TILE_SIZE, nearest.y * TILE_SIZE, 'explosion', '#ff6600');
@@ -357,7 +357,7 @@ export class GameEngine {
       const d = Math.sqrt((building.x - player.x) ** 2 + (building.y - player.y) ** 2);
       if (d < player.reach + 1 && d < nearestDist) {
         nearestDist = d;
-        nearest = { key, building: building as any };
+        nearest = { key, building };
       }
     }
     if (!nearest) return false;
@@ -766,7 +766,7 @@ export class GameEngine {
     if (building && (building.type === 'assembler' || building.type === 'furnace')) {
       const recipe = RECIPES[recipeId];
       if (recipe) {
-        building.recipe = { ...recipe } as any;
+        building.recipe = { ...recipe } as Recipe;
         this.addNotification(`Recipe set: ${recipe.name}`);
       }
     }
@@ -808,7 +808,7 @@ export class GameEngine {
   loadFromSave(save: import('../lib/saveSystem').SaveData): void {
     this.state.tick = save.tick ?? 0;
     this.state.pollution = save.pollution ?? 0;
-    this.state.totalPollutionGenerated = (save as any).totalPollutionGenerated ?? 0;
+    this.state.totalPollutionGenerated = save.totalPollutionGenerated ?? 0;
     this.state.evolution = save.evolution ?? 0;
     this.state.dayTime = save.dayTime ?? this.state.dayTime;
     this.state.weather = (save.weather as GameState['weather']) ?? 'clear';
@@ -821,7 +821,7 @@ export class GameEngine {
       timePlayed: save.statistics?.timePlayed ?? 0,
     };
     this.state.buildQueue = [];  // always start with fresh build queue on load
-    this.state.worldSeed = (save as any).worldSeed ?? this.state.worldSeed;
+    this.state.worldSeed = save.worldSeed ?? this.state.worldSeed;
     initWorldSeed(this.state.worldSeed);
     Object.assign(this.state.player, save.player);
     this.state.player.gems = this.state.player.gems ?? 0;
@@ -836,22 +836,22 @@ export class GameEngine {
 
     this.state.buildings.clear();
     for (const [key, b] of (save.buildings || [])) {
-      this.state.buildings.set(key as string, b as any);
+      this.state.buildings.set(key, b);
     }
 
     this.state.conveyors.clear();
     for (const [key, c] of (save.conveyors || [])) {
-      this.state.conveyors.set(key as string, c as any);
+      this.state.conveyors.set(key, c);
     }
 
     for (const [key, val] of (save.research || [])) {
-      const r = this.state.research.get(key as string);
-      if (r) Object.assign(r, val as any);
+      const r = this.state.research.get(key);
+      if (r) Object.assign(r, val);
     }
 
     this.state.npcs.clear();
     for (const [key, n] of (save.npcs || [])) {
-      this.state.npcs.set(key as string, n as any);
+      this.state.npcs.set(key, n);
     }
 
     // Clear building refs from tiles, then re-stamp
@@ -866,15 +866,15 @@ export class GameEngine {
       const size = BUILDING_SIZES[(building as Building).type as string] || { w: 1, h: 1 };
       for (let dy = 0; dy < size.h; dy++) {
         for (let dx = 0; dx < size.w; dx++) {
-          const tx = (building as any).x + dx;
-          const ty = (building as any).y + dy;
+          const tx = building.x + dx;
+          const ty = building.y + dy;
           const cx = Math.floor(tx / CHUNK_SIZE);
           const cy = Math.floor(ty / CHUNK_SIZE);
           const chunk = this.state.chunks.get(`${cx},${cy}`);
           if (chunk) {
             const lx = ((tx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
             const ly = ((ty % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
-            chunk[ly][lx].building = building as any;
+            chunk[ly][lx].building = building;
           }
         }
       }
@@ -912,12 +912,12 @@ export class GameEngine {
   }
 
   /** Ładuje dane świata podczas odwiedzania innego gracza (VisitWorldView). Zastępuje budynki i seed. */
-  loadWorldData(worldData: { buildings: [string, unknown][]; seed: number }) {
+  loadWorldData(worldData: { buildings: [string, Building][]; seed: number }) {
     this.state.buildings.clear();
     this.state.conveyors.clear();
 
     for (const [key, b] of (worldData.buildings || [])) {
-      this.state.buildings.set(key as string, b as any);
+      this.state.buildings.set(key, b);
     }
 
     if (worldData.seed) {

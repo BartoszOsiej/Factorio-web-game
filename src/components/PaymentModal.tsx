@@ -44,8 +44,8 @@ export default function PaymentModal({ onClose }: Props) {
 
       // Redirect to Stripe Checkout
       window.location.href = data.url
-    } catch (e: any) {
-      setError(e.message || 'Payment error. Please try again.')
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Payment error. Please try again.')
       setLoading(false)
     }
   };

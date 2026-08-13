@@ -188,7 +188,7 @@ export default function GuideMenu({ onClose }: Props) {
                       <span className="text-xl">{b.icon}</span>
                       <span className="font-bold text-sm text-amber-400 font-orbitron">{b.name}</span>
                     </div>
-                    <p className="text-xs text-white/60">{t(b.descKey as any)}</p>
+                    <p className="text-xs text-white/60">{t(b.descKey)}</p>
                   </div>
                 ))}
               </div>

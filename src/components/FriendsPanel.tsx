@@ -46,8 +46,14 @@ export default function FriendsPanel({ onClose, onVisitWorld }: Props) {
       .eq('status', 'accepted');
 
     if (data) {
-      const friendList: Friend[] = data.map((f: any) => ({
-        username: f.user_id === myId ? f.friend_username : f.user_username,
+      const rows = data as Array<{
+        user_id: string;
+        friend_id: string;
+        friend_username: string | null;
+        user_username: string | null;
+      }>;
+      const friendList: Friend[] = rows.map((f) => ({
+        username: f.user_id === myId ? (f.friend_username ?? '') : (f.user_username ?? ''),
         user_id: f.user_id === myId ? f.friend_id : f.user_id,
         online: false,
       }));

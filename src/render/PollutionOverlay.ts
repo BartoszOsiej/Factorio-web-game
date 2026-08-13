@@ -4,6 +4,7 @@
 // ══════════════════════════════════════════════════════════════════════
 
 import { CHUNK_SIZE, TILE_SIZE } from '../game/constants';
+import type { GameState } from '../game/types';
 
 export class PollutionOverlay {
   private pollCanvas: HTMLCanvasElement | null = null;
@@ -13,7 +14,7 @@ export class PollutionOverlay {
 
   render(
     ctx: CanvasRenderingContext2D,
-    state: any,
+    state: GameState,
     cameraX: number, cameraY: number,
     viewWidth: number, viewHeight: number,
     frameCount: number
@@ -67,7 +68,7 @@ export class PollutionOverlay {
         if (!tile) continue;
 
         // Check for pollution property on tile
-        const pollution = (tile as any).pollution || 0;
+        const pollution = tile.pollution || 0;
         if (pollution <= 0) continue;
 
         // Also check nearby buildings for active pollution sources

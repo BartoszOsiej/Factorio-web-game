@@ -2,7 +2,7 @@
  * System zapisu/wczytu gry. Główny storage to localStorage, z opcjonalnym
  * cloud backup do Supabase (world_snapshots).
  */
-import { GameState } from '../game/types';
+import { GameState, Building, ConveyorState, Research, NPC } from '../game/types';
 import { supabase } from './supabase';
 import { AuthService } from '../services/auth/AuthService';
 
@@ -14,14 +14,16 @@ export interface SaveData {
   tick: number;
   player: GameState['player'];
   pollution: number;
+  totalPollutionGenerated: number;
+  worldSeed: number;
   evolution: number;
   dayTime: number;
   weather: GameState['weather'];
   statistics: GameState['statistics'];
-  buildings: [string, unknown][];
-  conveyors: [string, unknown][];
-  research: [string, unknown][];
-  npcs: [string, unknown][];
+  buildings: [string, Building][];
+  conveyors: [string, ConveyorState[]][];
+  research: [string, Research][];
+  npcs: [string, NPC][];
   buildQueue: GameState['buildQueue'];
 }
 
@@ -38,6 +40,8 @@ export function saveGame(username: string, state: GameState): void {
     tick: state.tick,
     player: { ...state.player },
     pollution: state.pollution,
+    totalPollutionGenerated: state.totalPollutionGenerated,
+    worldSeed: state.worldSeed,
     evolution: state.evolution,
     dayTime: state.dayTime,
     weather: state.weather,

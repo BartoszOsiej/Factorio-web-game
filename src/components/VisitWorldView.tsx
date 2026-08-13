@@ -66,14 +66,20 @@ export default function VisitWorldView({ friendId, friendName, onClose }: Props)
           const channel = supabase
             .channel(`coop-${friendId}`, { config: { broadcast: { self: false } } })
             .on('broadcast', { event: 'pos' }, ({ payload }) => {
-              const { id, username, x, y, color } = payload as any;
+              const { id, username, x, y, color } = payload as {
+                id: string;
+                username?: string;
+                x: number;
+                y: number;
+                color?: string;
+              };
               if (id !== myId) {
-                engine.updateCoopVisitor(id, username, x, y, color);
+                engine.updateCoopVisitor(id, username ?? '', x, y, color ?? '');
                 setVisitorCount(engine.state.coopVisitors?.size ?? 0);
               }
             })
             .on('broadcast', { event: 'leave' }, ({ payload }) => {
-              engine.removeCoopVisitor((payload as any).id);
+              engine.removeCoopVisitor((payload as { id: string }).id);
               setVisitorCount(engine.state.coopVisitors?.size ?? 0);
             })
             .subscribe();

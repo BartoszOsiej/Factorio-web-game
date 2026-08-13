@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { t } from '../lib/i18n';
 
 import { CoopLobbyService, type LobbyInfo } from '../services/coop/CoopLobbyService';
+import type { GameState } from '../game/types';
 
 interface Props {
   onJoinLobby: (worldCode: string, worldSeed: number) => void;
@@ -45,10 +46,10 @@ export default function CoopMenu({ onJoinLobby, onLeaveLobby, lobbyInfo, isHost,
     setLoading(true);
     setError('');
     try {
-      const info = await CoopLobbyService.createLobby((window as any).__gameState);
+      const info = await CoopLobbyService.createLobby((window as { __gameState?: GameState }).__gameState!);
       onJoinLobby(info.worldCode, info.worldSeed);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to create lobby');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to create lobby');
     }
     setLoading(false);
   }, [onJoinLobby]);
@@ -60,8 +61,8 @@ export default function CoopMenu({ onJoinLobby, onLeaveLobby, lobbyInfo, isHost,
     try {
       const info = await CoopLobbyService.joinLobby(joinCode.toUpperCase());
       onJoinLobby(info.worldCode, info.worldSeed);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to join');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to join');
     }
     setLoading(false);
   }, [joinCode, onJoinLobby]);

@@ -90,8 +90,8 @@ export default function ShopMenu({ engine, state, onClose }: Props) {
       if (fnError) throw new Error(fnError.message)
       if (!data?.url) throw new Error('No checkout URL')
       window.location.href = data.url
-    } catch (e: any) {
-      setMessage(e.message || 'Stripe error')
+    } catch (e: unknown) {
+      setMessage(e instanceof Error ? e.message : 'Stripe error')
       setStripeLoading(null)
     }
   };

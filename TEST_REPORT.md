@@ -14,7 +14,26 @@ gzip 67 kB) · lint: 0 unused-vars errors.
 |---|---|---|
 | TypeScript (whole app) | `tsc --noEmit -p tsconfig.app.json` | ✅ 0 errors |
 | Production bundle | `vite build` | ✅ built in ~3 s |
-| Lint | `eslint .` | ⚠️ 28 style-only `no-explicit-any` + 7 react-hooks warnings remain |
+| Lint | `eslint .` | ✅ **0 errors** (all 28 `no-explicit-any` fixed) · 7 react-hooks style warnings remain |
+
+## Type-cleanup sweep (same date)
+
+All 28 `no-explicit-any` errors removed:
+
+- `saveSystem.ts` — `SaveData` tuples now typed (`Building`, `ConveyorState[]`,
+  `Research`, `NPC`); added the previously-missing `totalPollutionGenerated`
+  and `worldSeed` fields (now actually persisted).
+- `engine.ts` — 16 redundant/loose `as any` casts removed (enemy attack,
+  building placement, save/load restore, co-op world loading); `RECIPES`
+  spread now cast to `Recipe`.
+- `PollutionOverlay.ts` — `state: GameState`, `tile.pollution` typed.
+- Components — `catch (e: any)` → `catch (e: unknown)` with proper
+  narrowing (CoopMenu, PaymentModal, ShopMenu); typed Supabase rows
+  (FriendsPanel), typed broadcast payloads (VisitWorldView), typed window
+  bridge for `__gameState` (App, CoopMenu), `t(b.descKey)` without cast
+  (GuideMenu).
+
+Typecheck, build and lint all pass.
 
 ## Bugs found & fixed during the sweep
 
