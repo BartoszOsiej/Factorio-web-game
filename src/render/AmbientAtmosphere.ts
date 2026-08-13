@@ -82,8 +82,6 @@ export class AmbientAtmosphere {
       this.spawnParticles(vw, vh, camX, camY, dayFactor, buildingCount, tick);
     }
 
-    const cx = camX + vw * 0.5;
-    const cy = camY + vh * 0.5;
     const margin = 40;
 
     for (let i = this.active.length - 1; i >= 0; i--) {

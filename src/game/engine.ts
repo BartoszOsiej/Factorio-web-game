@@ -185,7 +185,6 @@ export class GameEngine {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       this.keys.add(e.key.toLowerCase());
-      if (e.key === 'b' || e.key === 'B') this.onStateChange && null; // handled in React
       if (e.key === 'q' || e.key === 'Q') {
         const dirs = ['up', 'right', 'down', 'left'];
         const idx = dirs.indexOf(this.selectedDirection);

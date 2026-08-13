@@ -29,7 +29,7 @@ interface CheckoutPayload {
 console.info("stripe-checkout started");
 
 export default {
-  fetch: withSupabase({ auth: ["publishable", "secret"] }, async (req, ctx) => {
+  fetch: withSupabase({ auth: ["publishable", "secret"] }, async (req, _ctx) => {
     if (req.method === "OPTIONS") {
       return new Response("ok", { headers: corsHeaders });
     }

@@ -14,11 +14,6 @@ const supabase = createClient(
 
 const endpointSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET") ?? "";
 
-const SUBSCRIPTION_PRICE_IDS = new Set([
-  "price_1TYW6EK4E5IHLVVAW4SaLTXU", // Starter -> starter
-  "price_1TYW9LK4E5IHLVVAZrXNVjWk", // Premium -> premium
-]);
-
 function tierFromPriceId(priceId: string): string {
   if (priceId === "price_1TYW6EK4E5IHLVVAW4SaLTXU") return "starter";
   if (priceId === "price_1TYW9LK4E5IHLVVAZrXNVjWk") return "premium";

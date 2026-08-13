@@ -23,6 +23,12 @@ export default tseslint.config(
         'warn',
         { allowConstantExport: true },
       ],
+      // The codebase deliberately prefixes intentionally-unused params/vars
+      // with `_` (e.g. `_variant`, `_state`) — honour that convention.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
     },
   }
 );

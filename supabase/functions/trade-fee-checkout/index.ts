@@ -26,7 +26,7 @@ interface FeePayload {
 console.info("trade-fee-checkout started");
 
 export default {
-  fetch: withSupabase({ auth: ["publishable", "secret"] }, async (req, ctx) => {
+  fetch: withSupabase({ auth: ["publishable", "secret"] }, async (req, _ctx) => {
     if (req.method === "OPTIONS") {
       return new Response("ok", { headers: corsHeaders });
     }
@@ -40,8 +40,6 @@ export default {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-
-      const amountPLN = (amountGrosz / 100).toFixed(2);
 
       const session = await stripe.checkout.sessions.create({
         mode: "payment",

@@ -43,7 +43,6 @@ export class GameRenderer {
   private enemyHitFlash = new Map<string, number>();
   private damageNumbers: { x: number; y: number; value: number; life: number; color: string }[] = [];
   private prevEnemyHealth = new Map<string, number>();
-  private _prevEnemyHealthIds: string[] = [];
   private sunShadowDX = 4;
   private sunShadowDY = 4;
   private sunShadowAlpha = 0.25;
@@ -598,7 +597,8 @@ export class GameRenderer {
         const jitter = 0.7 + ((h2 + p * 0.17) % 1) * 0.6;
         const px2 = rx + Math.cos(a) * rs * jitter;
         const py2 = ry + Math.sin(a) * rs * 0.65 * jitter;
-        p === 0 ? ctx.moveTo(px2, py2) : ctx.lineTo(px2, py2);
+        if (p === 0) ctx.moveTo(px2, py2);
+        else ctx.lineTo(px2, py2);
       }
       ctx.closePath();
       ctx.fill();
@@ -909,9 +909,6 @@ export class GameRenderer {
       ctx.setLineDash([]);
     }
   }
-
-  // Cached glow gradients — one per type, reused across frames
-  private static readonly _glowCache = new Map<string, { canvas: HTMLCanvasElement; radius: number }>();
 
   private renderBuildingGlow(ctx: CanvasRenderingContext2D, building: Building) {
     const x = building.x * TILE_SIZE;
@@ -2050,17 +2047,20 @@ export class GameRenderer {
     }
   }
 
+  private _lastPlayerX = 0;
+  private _lastPlayerY = 0;
+
   private renderPlayer(ctx: CanvasRenderingContext2D, state: GameState) {
     const { player } = state;
     const x = player.x * TILE_SIZE;
     const y = player.y * TILE_SIZE;
 
-    // Walking animation
-    const isMoving = state.player.isMoving || (
-      Math.abs(state.player.x - (state.player as any).prevX) > 0.01 ||
-      Math.abs(state.player.y - (state.player as any).prevY) > 0.01
-    );
-    const walkCycle = isMoving ? Math.sin(this.frameCount * 0.2) : 0;
+    // Walking animation — moving when the position changed since last frame
+    const isMoving =
+      Math.abs(player.x - this._lastPlayerX) > 0.01 ||
+      Math.abs(player.y - this._lastPlayerY) > 0.01;
+    this._lastPlayerX = player.x;
+    this._lastPlayerY = player.y;
     const bob = isMoving ? Math.abs(Math.sin(this.frameCount * 0.2)) * 1.8 : 0;
     const lean = isMoving ? Math.sin(this.frameCount * 0.2) * 0.03 : 0;
 
@@ -2396,8 +2396,8 @@ export class GameRenderer {
       const cfg = GameRenderer.LIGHT_CFG[building.type] || GameRenderer.DEFAULT_LIGHT;
       const radius = cfg[0] * zoom;
       const light = lightCtx.createRadialGradient(bx, bob, 0, bx, bob, radius);
-      const alphaStr = cfg[5].toString();
-      const alphaHalf = (cfg[5] * 0.4).toFixed(2);
+      const alphaStr = cfg[4].toString();
+      const alphaHalf = (cfg[4] * 0.4).toFixed(2);
       light.addColorStop(0, `rgba(${cfg[1]},${cfg[2]},${cfg[3]},${alphaStr})`);
       light.addColorStop(0.5, `rgba(${cfg[1]},${cfg[2]},${cfg[3]},${alphaHalf})`);
       light.addColorStop(1, `rgba(${cfg[1]},${cfg[2]},${cfg[3]},0)`);
@@ -2416,53 +2416,8 @@ export class GameRenderer {
     this.ctx.drawImage(lightCanvas, 0, 0);
   }
 
-  private renderWeather(ctx: CanvasRenderingContext2D, state: GameState) {
-    if (state.weather === 'rain' || state.weather === 'storm') {
-      const intensity = state.weather === 'storm' ? 0.25 : 0.12;
-      ctx.fillStyle = `rgba(80,120,180,${intensity})`;
-      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-
-      // Rain drops — batched into single path (ONE stroke call for all drops)
-      const dropCount = state.weather === 'storm' ? 150 : 60;
-      ctx.strokeStyle = 'rgba(180,210,255,0.25)';
-      ctx.lineWidth = 1;
-      const windOffset = state.weather === 'storm' ? 4 : 1;
-      const cw = this.canvas.width;
-      const ch = this.canvas.height;
-      ctx.beginPath();
-      for (let i = 0; i < dropCount; i++) {
-        const rx = (this.frameCount * 7.3 + i * 137.7) % cw;
-        const ry = (this.frameCount * 13.1 + i * 251.3) % ch;
-        ctx.moveTo(rx, ry);
-        ctx.lineTo(rx - windOffset, ry + 12);
-      }
-      ctx.stroke();
-
-      // Lightning flash for storms
-      if (state.weather === 'storm' && this.frameCount % 300 < 3) {
-        ctx.fillStyle = 'rgba(200,220,255,0.15)';
-        ctx.fillRect(0, 0, cw, ch);
-      }
-    } else if (state.weather === 'fog') {
-      const w = this.canvas.width, h = this.canvas.height;
-      const fogGrad = ctx.createRadialGradient(w / 2, h / 2, w * 0.1, w / 2, h / 2, w * 0.7);
-      fogGrad.addColorStop(0, 'rgba(180,195,210,0)');
-      fogGrad.addColorStop(0.5, 'rgba(180,195,210,0.08)');
-      fogGrad.addColorStop(1, 'rgba(180,195,210,0.22)');
-      ctx.fillStyle = fogGrad;
-      ctx.fillRect(0, 0, w, h);
-      const t = this.frameCount * 0.002;
-      for (let i = 0; i < 3; i++) {
-        const wispX = ((t * 40 + i * (w / 3)) % (w + 200)) - 100;
-        const wispGrad = ctx.createLinearGradient(wispX - 150, 0, wispX + 150, 0);
-        wispGrad.addColorStop(0, 'rgba(200,210,220,0)');
-        wispGrad.addColorStop(0.5, `rgba(200,210,220,${(0.04 + Math.sin(t + i) * 0.01).toFixed(3)})`);
-        wispGrad.addColorStop(1, 'rgba(200,210,220,0)');
-        ctx.fillStyle = wispGrad;
-        ctx.fillRect(wispX - 150, h * 0.2 + i * h * 0.25, 300, h * 0.3);
-      }
-    }
-  }
+  // Weather rendering (rain/snow/fog/storm particles) is handled by
+  // `this.weatherSystem` (WeatherSystem) in the main render loop.
 
   // Cached vignette — static, only rebuild on resize
   private _vignetteCanvas: HTMLCanvasElement | null = null;

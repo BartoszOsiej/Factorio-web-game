@@ -2,7 +2,7 @@ import { GameState, Building, Enemy } from '../../game/types'
 import { TILE_SIZE, BUILDING_SIZES, RECIPES, RESOURCE_COLORS } from '../../game/constants'
 import { getTileAt } from './chunk'
 import { addItemToBuilding, addItemToBuildingOutput, removeItemFromBuilding, removeItemFromBuildingOutput, getAcceptedItemTypes } from './helpers'
-import { grantXPToPlayer } from './economy'
+import { grantXPToPlayer, removeBuilding } from './economy'
 import { spawnParticle } from './world'
 
 function updateMiner(state: GameState, building: Building) {

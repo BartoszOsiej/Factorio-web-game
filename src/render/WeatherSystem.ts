@@ -41,7 +41,6 @@ export class WeatherSystem {
   private transitionProgress = 1;
   private lightningTimer = 0;
   private lightningAlpha = 0;
-  private windOffset = 0;
   private initialized = false;
 
   setWeather(weather: WeatherType) {
@@ -61,6 +60,7 @@ export class WeatherSystem {
       particleCount: Math.round(ca.particleCount + (cb.particleCount - ca.particleCount) * t),
       windX: ca.windX + (cb.windX - ca.windX) * t,
       windY: ca.windY + (cb.windY - ca.windY) * t,
+      color: t < 0.5 ? ca.color : cb.color,
       sizeRange: [ca.sizeRange[0] + (cb.sizeRange[0] - ca.sizeRange[0]) * t, ca.sizeRange[1] + (cb.sizeRange[1] - ca.sizeRange[1]) * t] as [number, number],
       speedRange: [ca.speedRange[0] + (cb.speedRange[0] - ca.speedRange[0]) * t, ca.speedRange[1] + (cb.speedRange[1] - ca.speedRange[1]) * t] as [number, number],
       alphaRange: [ca.alphaRange[0] + (cb.alphaRange[0] - ca.alphaRange[0]) * t, ca.alphaRange[1] + (cb.alphaRange[1] - ca.alphaRange[1]) * t] as [number, number],

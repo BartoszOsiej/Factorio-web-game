@@ -225,7 +225,6 @@ export class ParticleEffectsSystem {
 
   spawnTeslaArc(x1: number, y1: number, x2: number, y2: number) {
     const segments = 6;
-    let px = x1, py = y1;
     for (let i = 0; i < segments; i++) {
       const t = (i + 1) / segments;
       const nx = x1 + (x2 - x1) * t + (Math.random() - 0.5) * 15;
@@ -244,8 +243,6 @@ export class ParticleEffectsSystem {
         decay: 0.8,
         type: 'circle',
       });
-      px = nx;
-      py = ny;
     }
     this.spawnSparks(x2, y2, 3);
   }

@@ -44,5 +44,5 @@ export function runBrainfuck(code: string, input = ''): string {
 }
 
 export function isBrainfuck(input: string): boolean {
-  return /^[+\-<>\[\].,\s]*$/.test(input);
+  return /^[+\-<>[\].,\s]*$/.test(input);
 }
