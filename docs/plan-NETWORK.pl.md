@@ -1,84 +1,79 @@
-# SHDD NETWORK — Implementation Plan
+# SHDD NETWORK — Plan wdrożeniowy
 
-**Author:** Shithead Dev + BigZen  
-**Date:** 2026-05-21  
-**Version:** 1.0  
-**Status:** Phase 0 implementation (Senior Update) completed.
-
----
-
-## Table of contents
-
-1. [Philosophy](#1-philosophy)
-2. [Tech stack](#2-tech-stack)
-3. [Database — detailed schema](#3-database--detailed-schema)
-4. [API architecture](#4-api-architecture)
-5. [Planets](#5-planets)
-6. [Monetization — full model](#6-monetization--full-model)
-7. [Unique skin system](#7-unique-skin-system)
-8. [Payment system (Stripe)](#8-payment-system-stripe)
-9. [Implementation phases — dependency tasks](#9-implementation-phases--dependency-tasks)
-10. [Files — manifest of all files](#10-files--manifest-of-all-files)
-11. [Success metrics](#11-success-metrics)
-12. [Glossary](#12-glossary)
+**Autor:** Shithead Dev + BigZen  
+**Data:** 2026-05-21  
+**Wersja:** 1.0  
+**Status:** Implementacja fazy 0 (Senior Update) zakończona.
 
 ---
 
-## 1. PHILOSOPHY
+## Spis treści
 
-### 1.1 Mission
-
-SHDD NETWORK is not a game. It is a place. A platform of worlds where everyone
-can be whoever they want, do whatever they want, with whoever they want,
-whenever they want, wherever they want. Zero ratings, zero hate, zero "you're
-too weak". You enter, you are whoever you want to be, nobody judges you.
-
-Inspiration: OASIS from Ready Player One. Execution: our own, from player to player.
-
-### 1.2 Guiding principles
-
-1. **Zero lockouts** — everything is available for free. You pay for
-   convenience and uniqueness, not for access.
-2. **Zero pay-to-win** — no premium item gives an advantage in any game.
-3. **Zero ads** — never, ever.
-4. **One account** — the same avatar, friends, and chat across all worlds.
-5. **Privacy** — no metrics, no tracking, no profiling. Account = email + nickname.
-6. **From player to player** — the creator is a player, not a corporation.
-
-### 1.3 Who we are
-
-- **Shithead Dev** — visionary, player, world creator. Doesn't sell a product,
-  builds a space. Plays with you.
-- **BigZen** — architect, senior, calm in chaos. Turns vision into code.
+1. [Filozofia](#1-filozofia)
+2. [Stack technologiczny](#2-stack-technologiczny)
+3. [Baza danych — szczegółowy schemat](#3-baza-danych--szczegółowy-schemat)
+4. [Architektura API](#4-architektura-api)
+5. [Planety](#5-planety)
+6. [Monetyzacja — pełen model](#6-monetyzacja--pełen-model)
+7. [System skinów unikatowych](#7-system-skinów-unikatowych)
+8. [System płatności (Stripe)](#8-system-płatności-stripe)
+9. [Fazy implementacji — taski zależnościowe](#9-fazy-implementacji--taski-zależnościowe)
+10. [Pliki — manifest wszystkich plików](#10-pliki--manifest-wszystkich-plików)
+11. [Miary sukcesu](#11-miary-sukcesu)
+12. [Słownik pojęć](#12-słownik-pojęć)
 
 ---
 
-## 2. TECH STACK
+## 1. FILOZOFIA
 
-### 2.1 Layers
+### 1.1 Misja
 
-| Layer | Technology | Version | Cost | Notes |
+SHDD NETWORK to nie gra. To miejsce. Platforma światów, w której każdy może być kim chce, robić co chce, z kim chce, kiedy chce i gdzie chce. Zero ocen, zero hejtu, zero "jesteś za słaby". Wchodzisz, jesteś kim chcesz, nikt cię nie ocenia.
+
+Inspiracja: OASIS z Ready Player One. Realizacja: własna, od gracza dla gracza.
+
+### 1.2 Zasady naczelne
+
+1. **Zero blokad** — wszystko jest dostępne za free. Płacisz za wygodę i unikatowość, nie za dostęp.
+2. **Zero pay-to-win** — żaden przedmiot premium nie daje przewagi w żadnej grze.
+3. **Zero reklam** — nigdy, przenigdy.
+4. **Jedno konto** — ten sam awatar, znajomi, chat we wszystkich światach.
+5. **Prywatność** — żadnych metryk, śledzenia, profilowania. Konto = email + nick.
+6. **Od gracza dla gracza** — twórca jest graczem, nie korpo.
+
+### 1.3 Kim jesteśmy
+
+- **Shithead Dev** — wizjoner, gracz, twórca światów. Nie sprzedaje produktu, tworzy przestrzeń. Gra razem z wami.
+- **BigZen** — architekt, senior, spokój w chaosie. Zamienia wizję w kod.
+
+---
+
+## 2. STACK TECHNOLOGICZNY
+
+### 2.1 Warstwy
+
+| Warstwa | Technologia | Wersja | Koszt | Uwagi |
 |---|---|---|---|---|
-| **Frontend hosting** | Cloudflare Pages | - | Free | Deploy from GitHub, preview deployments |
-| **Frontend framework** | Vite + React 18 | 6.x + 18.x | Free | TS strict mode, no CRA |
-| **2D engine** | Canvas 2D API | - | Free | Custom TS renderer |
-| **3D engine** | Three.js | r160+ | Free | Only in Phase 3 |
-| **Auth** | Supabase Auth | - | $0-15/mo | Email/password + OAuth |
-| **Relational DB** | Supabase Postgres | - | $0-15/mo | RLS, pgcrypto, JSONB |
-| **Cache / KV** | Cloudflare Workers KV | - | Free (1GB) | Sessions, tickets, rate limit |
+| **Hosting frontendu** | Cloudflare Pages | - | Free | Deploy z GitHub, preview deployments |
+| **Framework frontend** | Vite + React 18 | 6.x + 18.x | Free | TS strict mode, brak CRA |
+| **Silnik 2D** | Canvas 2D API | - | Free | Renderer własny w TS |
+| **Silnik 3D** | Three.js | r160+ | Free | Dopiero w Fazie 3 |
+| **Auth** | Supabase Auth | - | $0-15/mies | Email/password + OAuth |
+| **Baza relacyjna** | Supabase Postgres | - | $0-15/mies | RLS, pgcrypto, JSONB |
+| **Cache / KV** | Cloudflare Workers KV | - | Free (1GB) | Sesje, tickety, rate limit |
 | **Structured data** | Cloudflare D1 | - | Free (5GB) | SQLite-based, payments, cosmetics |
-| **Binary storage** | Cloudflare R2 | - | Free (10GB) | Saves, blueprints, avatars, mods |
+| **Binary storage** | Cloudflare R2 | - | Free (10GB) | Saves, blueprints, avatary, mods |
 | **API Gateway** | Cloudflare Workers | - | Free (100k req/d) | TypeScript, ES modules |
 | **WebSockets** | Supabase Realtime | - | Free | Bcast + presence (WAL-less) |
-| **Payments** | Stripe | - | 2.9%+0.30PLN/tx | Webhooks + Checkout Sessions |
+| **Płatności** | Stripe | - | 2.9%+0.30PLN/tx | Webhooks + Checkout Sessions |
 | **CI/CD** | GitHub Actions | - | Free | Lint + typecheck + deploy |
 
-### 2.2 Data flow diagram
+### 2.2 Diagram przepływu danych
 
 ```
                         ┌──────────────┐
-                        │  User        │
-                        │  (browser)   │
+                        │  Użytkownik  │
+                        │  (przegląd.) │
                         └──────┬───────┘
                                │ HTTPS
                     ┌──────────▼──────────┐
@@ -101,19 +96,18 @@ Inspiration: OASIS from Ready Player One. Execution: our own, from player to pla
      └────────────────┘ └─────────────┘ └────────────────┘
 ```
 
-### 2.3 Coding conventions
+### 2.3 Konwencje kodowania
 
-- TypeScript strict mode, no `any`
-- Files: PascalCase for components (`CoopMenu.tsx`), camelCase for services
-  (`authService.ts`), kebab-case for migrations (`20260521_coop_lobbies.sql`)
-- Imports: absolute (alias `@/` → `src/`)
-- Style: custom (vs code? Prettier?) — to be decided, no linter for now
+- TypeScript strict mode, brak `any`
+- Pliki: PascalCase dla komponentów (`CoopMenu.tsx`), camelCase dla serwisów (`authService.ts`), kebab-case dla migracji (`20260521_coop_lobbies.sql`)
+- Imports: absolutne (alias `@/` → `src/`)
+- Styl: niestandardowy (vs code? Prettier?) — do ustalenia, na razie brak lintera
 
 ---
 
-## 3. DATABASE — DETAILED SCHEMA
+## 3. BAZA DANYCH — SZCZEGÓŁOWY SCHEMAT
 
-### 3.1 Supabase (Postgres) — existing tables
+### 3.1 Supabase (Postgres) — tabele istniejące
 
 #### `profiles`
 
@@ -135,9 +129,9 @@ ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ```
 
 **RLS policies:**
-- `SELECT`: `USING (true)` — everyone sees profiles
-- `INSERT`: `WITH CHECK (auth.uid() = id)` — own profile only
-- `UPDATE`: `USING (auth.uid() = id) WITH CHECK (auth.uid() = id)` — own only
+- `SELECT`: `USING (true)` — każdy widzi profile
+- `INSERT`: `WITH CHECK (auth.uid() = id)` — tylko własny profil
+- `UPDATE`: `USING (auth.uid() = id) WITH CHECK (auth.uid() = id)` — tylko własny
 
 #### `friendships`
 
@@ -157,10 +151,10 @@ CREATE INDEX friendships_friend_idx ON friendships (friend_id);
 ```
 
 **RLS policies:**
-- `SELECT`: `USING (auth.uid() = user_id OR auth.uid() = friend_id)` — participants only
-- `INSERT`: `WITH CHECK (auth.uid() = user_id)` — the inviter
-- `UPDATE`: `USING (auth.uid() = friend_id)` — the accepter
-- `DELETE`: `USING (auth.uid() = user_id OR auth.uid() = friend_id)` — either side
+- `SELECT`: `USING (auth.uid() = user_id OR auth.uid() = friend_id)` — tylko uczestnicy
+- `INSERT`: `WITH CHECK (auth.uid() = user_id)` — zapraszający
+- `UPDATE`: `USING (auth.uid() = friend_id)` — akceptujący
+- `DELETE`: `USING (auth.uid() = user_id OR auth.uid() = friend_id)` — każda strona
 
 #### `chat_messages`
 
@@ -175,7 +169,7 @@ CREATE TABLE chat_messages (
 CREATE INDEX chat_messages_created_idx ON chat_messages (created_at DESC);
 ```
 
-**Triggers:** `cleanup_old_chat()` (removes messages older than 300), `check_chat_rate_limit()` (max 1/2s)
+**Triggers:** `cleanup_old_chat()` (usuwa starsze niż 300 wiadomości), `check_chat_rate_limit()` (max 1/2s)
 
 **RLS policies:**
 - `SELECT`: `USING (true)`
@@ -189,8 +183,8 @@ CREATE TABLE world_snapshots (
   username        TEXT NOT NULL,
   tick            INTEGER NOT NULL DEFAULT 0,
   building_count  INTEGER NOT NULL DEFAULT 0,
-  world_data      TEXT,  -- JSON of buildings for co-op visit
-  save_data       TEXT,  -- JSON of full save
+  world_data      TEXT,  -- JSON budynków dla co-op visit
+  save_data       TEXT,  -- JSON pełnego save'a
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 ```
@@ -199,7 +193,7 @@ CREATE TABLE world_snapshots (
 
 ```sql
 CREATE TABLE coop_lobbies (
-  world_code    TEXT PRIMARY KEY,           -- 6 chars: ABCDEFGHJKLMNPQRSTUVWXYZ23456789
+  world_code    TEXT PRIMARY KEY,           -- 6 znaków: ABCDEFGHJKLMNPQRSTUVWXYZ23456789
   host_id       UUID NOT NULL REFERENCES auth.users ON DELETE CASCADE,
   world_seed    INTEGER NOT NULL,
   state         TEXT DEFAULT 'open' CHECK (state IN ('open','in_game','closed')),
@@ -211,10 +205,10 @@ CREATE INDEX coop_lobbies_host_idx ON coop_lobbies (host_id);
 ```
 
 **RLS policies:**
-- `SELECT`: `USING (true)` — everyone sees lobbies
-- `INSERT`: `WITH CHECK (auth.uid() IS NOT NULL)` — any logged-in user creates
-- `UPDATE`: `USING (auth.uid() = host_id)` — host only
-- `DELETE`: `USING (auth.uid() = host_id)` — host only
+- `SELECT`: `USING (true)` — każdy widzi lobbies
+- `INSERT`: `WITH CHECK (auth.uid() IS NOT NULL)` — każdy zalogowany tworzy
+- `UPDATE`: `USING (auth.uid() = host_id)` — tylko host zmienia
+- `DELETE`: `USING (auth.uid() = host_id)` — tylko host usuwa
 
 #### `coop_members`
 
@@ -237,9 +231,9 @@ CREATE INDEX coop_members_user_idx ON coop_members (user_id);
 - `SELECT`: `USING (true)`
 - `INSERT`: `WITH CHECK (auth.uid() IS NOT NULL)`
 - `UPDATE`: `USING (auth.uid() = user_id)` — heartbeat
-- `DELETE`: `USING (auth.uid() = user_id OR auth.uid() IN (SELECT host_id FROM coop_lobbies WHERE world_code = coop_members.world_code))` — self-leave or host kick
+- `DELETE`: `USING (auth.uid() = user_id OR auth.uid() IN (SELECT host_id FROM coop_lobbies WHERE world_code = coop_members.world_code))` — self-leave lub host kick
 
-### 3.2 Cloudflare D1 — new tables
+### 3.2 Cloudflare D1 — tabele nowe
 
 #### `payments`
 
@@ -250,7 +244,7 @@ CREATE TABLE payments (
   user_id           TEXT NOT NULL,
   username          TEXT NOT NULL,
   stripe_session_id TEXT UNIQUE NOT NULL,
-  amount            REAL NOT NULL,             -- in PLN
+  amount            REAL NOT NULL,             -- w PLN
   currency          TEXT DEFAULT 'PLN',
   product           TEXT NOT NULL,             -- 'founder_pack', 'supporter_badge', 'unique_skin', 'hosting'
   product_ref       TEXT,                      -- skin_id / badge_id / hosting_id
@@ -266,15 +260,15 @@ CREATE INDEX idx_payments_stripe ON payments(stripe_session_id);
 ```sql
 CREATE TABLE skins (
   id              TEXT PRIMARY KEY,           -- UUID
-  owner_id        TEXT,                       -- NULL = unclaimed
+  owner_id        TEXT,                       -- NULL = niezajęty
   pattern_data    TEXT NOT NULL,              -- JSON: { colors: [], pattern: string, effect: string }
-  hash            TEXT UNIQUE NOT NULL,        -- unique fingerprint (SHA256 of pattern_data)
+  hash            TEXT UNIQUE NOT NULL,        -- unikalny fingerprint (SHA256 z pattern_data)
   source          TEXT NOT NULL,              -- 'achievement', 'birthday', 'raffle', 'purchase'
   source_ref      TEXT,                       -- achievement_id / NULL
-  price           REAL NOT NULL DEFAULT 100,  -- in PLN
-  claimed_at      TEXT,                       -- when assigned
-  expires_at      TEXT,                       -- NULL = owned, otherwise reservation expiry
-  is_purchased    INTEGER DEFAULT 0,          -- 0 = reserved, 1 = permanently bought
+  price           REAL NOT NULL DEFAULT 100,  -- w PLN
+  claimed_at      TEXT,                       -- kiedy przypisany
+  expires_at      TEXT,                       -- NULL = własność, inaczej data wygaśnięcia rezerwacji
+  is_purchased    INTEGER DEFAULT 0,          -- 0 = zarezerwowany, 1 = kupiony na stałe
   created_at      TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX idx_skins_owner ON skins(owner_id);
@@ -287,7 +281,7 @@ CREATE INDEX idx_skins_hash ON skins(hash);
 CREATE TABLE hosting_subscriptions (
   id              TEXT PRIMARY KEY,           -- UUID
   user_id         TEXT NOT NULL,
-  world_name      TEXT NOT NULL,              -- Atelier room name
+  world_name      TEXT NOT NULL,              -- nazwa pokoju w Atelier
   active          INTEGER DEFAULT 1,
   stripe_subscription_id TEXT,
   current_period_start TEXT,
@@ -306,7 +300,7 @@ CREATE TABLE blueprint_library (
   name            TEXT NOT NULL,
   description     TEXT DEFAULT '',
   tags            TEXT DEFAULT '[]',          -- JSON array
-  data            TEXT NOT NULL,              -- compressed blueprint string
+  data            TEXT NOT NULL,              -- skompresowany string blueprintu
   is_public       INTEGER DEFAULT 0,
   downloads       INTEGER DEFAULT 0,
   likes           INTEGER DEFAULT 0,
@@ -317,15 +311,15 @@ CREATE INDEX idx_blueprint_user ON blueprint_library(user_id);
 CREATE INDEX idx_blueprint_public ON blueprint_library(is_public);
 ```
 
-### 3.3 Cloudflare R2 — directory structure
+### 3.3 Cloudflare R2 — struktura katalogów
 
 ```
 saves/
   {userId}/
-    latest.json              -- latest save
-    {timestamp}.json         -- historical (if premium)
+    latest.json              -- ostatni save
+    {timestamp}.json         -- historyczne (jeśli premium)
 blueprints/
-  {hash}.bp                  -- compressed blueprint
+  {hash}.bp                  -- skompresowany blueprint
 avatars/
   {userId}.png               -- custom avatar upload
 mods/
@@ -334,7 +328,7 @@ mods/
     v{version}.zip
 cosmetics/
   skins/
-    {skinId}.png             -- skin render
+    {skinId}.png             -- render skina
 public/
   logo.png
   favicon.ico
@@ -342,28 +336,28 @@ public/
 
 ---
 
-## 4. API ARCHITECTURE
+## 4. ARCHITEKTURA API
 
 ### 4.1 Cloudflare Worker Router
 
-Base endpoint: `https://api.shdd.network/v1`
+Endpoint bazowy: `https://api.shdd.network/v1`
 
-Every endpoint returns `{ ok: boolean, data?: T, error?: string }`.
+Każdy endpoint wraca `{ ok: boolean, data?: T, error?: string }`.
 
-#### Group: Auth
+#### Grupa: Auth
 
-| Endpoint | Method | Body | Response | Auth |
+| Endpoint | Metoda | Body | Response | Auth |
 |---|---|---|---|---|
 | `/v1/auth/register` | POST | `{ email, password, username }` | `{ session, profile }` | - |
 | `/v1/auth/login` | POST | `{ email, password }` | `{ session, profile }` | - |
 | `/v1/auth/logout` | POST | - | `{ ok }` | JWT |
 | `/v1/auth/me` | GET | - | `{ profile }` | JWT |
 
-**Implementation:** Proxy to Supabase Auth. The Worker adds CORS + rate limiting.
+**Implementacja:** Proxy do Supabase Auth. Worker dodaje CORS + rate limiting.
 
-#### Group: Lobby
+#### Grupa: Lobby
 
-| Endpoint | Method | Body | Response | Auth |
+| Endpoint | Metoda | Body | Response | Auth |
 |---|---|---|---|---|
 | `/v1/lobby/create` | POST | `{ worldSeed }` | `{ lobby }` | JWT |
 | `/v1/lobby/join` | POST | `{ worldCode }` | `{ lobby }` | JWT |
@@ -371,26 +365,24 @@ Every endpoint returns `{ ok: boolean, data?: T, error?: string }`.
 | `/v1/lobby/info` | GET | `?code=XXX` | `{ lobby }` | JWT |
 | `/v1/lobby/heartbeat` | POST | `{ worldCode }` | `{ ok }` | JWT |
 
-**Implementation:** The Worker validates the JWT and operates on `coop_lobbies`
-and `coop_members` via Supabase REST. Generates a 6-char code from the set
-`ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (no 0, O, I, 1 — readability).
+**Implementacja:** Worker waliduje JWT, wykonuje operacje na `coop_lobbies` i `coop_members` przez Supabase REST. Generuje kod 6-znakowy z zestawu `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (bez 0, O, I, 1 — czytelność).
 
-#### Group: Payments
+#### Grupa: Payments
 
-| Endpoint | Method | Body | Response | Auth |
+| Endpoint | Metoda | Body | Response | Auth |
 |---|---|---|---|---|
 | `/v1/payments/create-session` | POST | `{ product, price, metadata }` | `{ sessionUrl }` | JWT |
 | `/v1/payments/webhook` | POST | Stripe Event | `{ received }` | Stripe-Signature |
 | `/v1/payments/history` | GET | - | `{ payments[] }` | JWT |
 
-**Implementation:**
-- `create-session`: Creates a Stripe Checkout Session, stores the pending payment in D1
-- `webhook`: Receives `checkout.session.completed`, updates D1, grants the product (badge/skin/hosting)
-- `history`: Reads from D1 by `user_id`
+**Implementacja:**
+- `create-session`: Tworzy Stripe Checkout Session, zapisuje pending payment w D1
+- `webhook`: Odbiera `checkout.session.completed`, aktualizuje D1, przyznaje produkt (badge/skin/hosting)
+- `history`: Czyta z D1 po `user_id`
 
-#### Group: Cosmetics
+#### Grupa: Cosmetics
 
-| Endpoint | Method | Body | Response | Auth |
+| Endpoint | Metoda | Body | Response | Auth |
 |---|---|---|---|---|
 | `/v1/cosmetics/skins/mine` | GET | - | `{ owned[], reserved[], marketplace[] }` | JWT |
 | `/v1/cosmetics/skins/purchase` | POST | `{ skinId }` | `{ sessionUrl }` | JWT |
@@ -398,28 +390,27 @@ and `coop_members` via Supabase REST. Generates a 6-char code from the set
 | `/v1/cosmetics/skins/buy-marketplace` | POST | `{ skinId }` | `{ ok }` | JWT |
 | `/v1/cosmetics/skins/equip` | POST | `{ skinId }` | `{ ok }` | JWT |
 
-**Implementation:** The Worker validates ownership, creates a Stripe session
-for the purchase, and manages the marketplace listing.
+**Implementacja:** Worker waliduje własność, tworzy Stripe session dla zakupu, zarządza listingiem marketplace.
 
-#### Group: Profiles
+#### Grupa: Profiles
 
-| Endpoint | Method | Body | Response | Auth |
+| Endpoint | Metoda | Body | Response | Auth |
 |---|---|---|---|---|
 | `/v1/profiles/{userId}` | GET | - | `{ profile, badges, equippedSkin }` | - |
 | `/v1/profiles/me` | PATCH | `{ avatarData }` | `{ profile }` | JWT |
 | `/v1/profiles/me/stats` | GET | - | `{ playtime, achievements, ... }` | JWT |
 
-**Implementation:** Reads from Supabase (profile) + D1 (badges, skins) + R2 (avatar).
+**Implementacja:** Czyta z Supabase (profile) + D1 (badges, skiny) + R2 (avatar).
 
-### 4.2 Supabase Realtime — channels
+### 4.2 Supabase Realtime — kanały
 
-| Channel | Events | Subscribers | Description |
+| Kanał | Zdarzenia | Kto subskrybuje | Opis |
 |---|---|---|---|
-| `coop-{worldCode}` | `pos`, `leave`, `build_place`, `build_remove`, `heartbeat`, `state_delta` | Lobby participants | Co-op sync |
-| `chat-global` | `message` | Everyone | Global chat |
-| `chat-lobby-{lobbyId}` | `message`, `join`, `leave` | Lobby participants | Lobby chat |
+| `coop-{worldCode}` | `pos`, `leave`, `build_place`, `build_remove`, `heartbeat`, `state_delta` | Uczestnicy lobby | Co-op sync |
+| `chat-global` | `message` | Wszyscy | Globalny czat |
+| `chat-lobby-{lobbyId}` | `message`, `join`, `leave` | Uczestnicy lobby | Czat lobby |
 
-### 4.3 Payload types (TypeScript)
+### 4.3 Typy payloadów (TypeScript)
 
 ```typescript
 // === Co-op ===
@@ -432,12 +423,12 @@ interface CoopPosPayload {
 }
 
 interface CoopBuildPlacePayload {
-  type: string;        // building type e.g. 'miner'
+  type: string;        // building type np. 'miner'
   x: number;
   y: number;
   dir: string;         // 'up' | 'down' | 'left' | 'right'
   senderId: string;
-  nonce: string;       // UUID, deduplication
+  nonce: string;       // UUID, deduplikacja
 }
 
 interface CoopBuildRemovePayload {
@@ -461,19 +452,19 @@ interface CoopStateDeltaPayload {
 // === Payments ===
 interface StripeSessionRequest {
   product: 'founder_pack' | 'supporter_badge' | 'unique_skin' | 'hosting';
-  price: number;           // in PLN
+  price: number;           // w PLN
   metadata: Record<string, string>;
 }
 
 interface StripeSessionResponse {
-  sessionUrl: string;      // redirect to Stripe Checkout
+  sessionUrl: string;      // przekierowanie do Stripe Checkout
 }
 
 // === Cosmetics ===
 interface SkinData {
   id: string;
   ownerId: string | null;
-  patternData: {            // JSON with color + pattern + effect
+  patternData: {            // JSON z kolorem + wzorem + efektem
     primaryColor: string;
     secondaryColor: string;
     pattern: string;        // 'stripes', 'dots', 'flame', 'geometric', 'pixel'
@@ -496,34 +487,33 @@ interface BadgeData {
 
 ---
 
-## 5. PLANETS
+## 5. PLANETY
 
-### 5.1 Novactorio — Planet 1 (2D, pixel art, factory builder)
+### 5.1 Novactorio — Planeta 1 (2D, pixel art, factory builder)
 
-**Status:** ✅ In production after Phase 0.  
-**Engine:** Canvas 2D + custom TS renderer.  
-**Directory:** `src/` (main repo).  
-**Subdomain:** `novactorio.shdd.network` or `/` (for MVP).
+**Stan:** ✅ W produkcji po Fazie 0.  
+**Silnik:** Canvas 2D + własny TS renderer.  
+**Katalog:** `src/` (główne repo).  
+**Subdomena:** `novactorio.shdd.network` lub `/` (dla MVP).
 
-#### What's left to do (Phase 1 Novactorio Polish):
+#### Co zostało do zrobienia (Phase 1 Novactorio Polish):
 
-| No | Task | Files | Time | Priority |
+| Lp | Task | Pliki | Czas | Priorytet |
 |---|---|---|---|---|
-| 1 | Resource balancing (amounts, ratios, craft tree) | `game/constants.ts`, `core/systems/production.ts` | 2 days | HIGH |
-| 2 | More achievements (20+) with rewards | `core/systems/achievements.ts`, `game/constants.ts` | 1 day | MEDIUM |
-| 3 | Interactive tutorial (first 5 minutes) | `components/Tutorial.tsx`, `core/systems/tutorial.ts` | 3 days | HIGH |
-| 4 | UI/UX: tooltips, click feedback, animations | `components/`, `renderer.ts` | 3 days | MEDIUM |
-| 5 | Sound design: SFX (build, mine, craft) + ambient | `game/audio.ts`, `assets/sfx/` | 4 days | MEDIUM |
-| 6 | Chunking and rendering optimization | `core/systems/chunk.ts`, `renderer.ts` | 2 days | HIGH |
-| 7 | More tips and NPC dialogs | `game/constants.ts`, `core/systems/entity.ts` | 1 day | LOW |
-| 8 | Prepare for the NETWORK SDK | `services/network/NetworkSDK.ts` | 2 days | HIGH |
+| 1 | Balancing surowców (ilości, proporcje, craft tree) | `game/constants.ts`, `core/systems/production.ts` | 2 dni | WYSOKI |
+| 2 | Więcej achievementów (20+) z nagrodami | `core/systems/achievements.ts`, `game/constants.ts` | 1 dzień | ŚREDNI |
+| 3 | Samouczek interaktywny (pierwsze 5 min) | `components/Tutorial.tsx`, `core/systems/tutorial.ts` | 3 dni | WYSOKI |
+| 4 | UI/UX: tooltipy, feedback kliknięć, animacje | `components/`, `renderer.ts` | 3 dni | ŚREDNI |
+| 5 | Sound design: SFX (build, mine, craft) + ambient | `game/audio.ts`, `assets/sfx/` | 4 dni | ŚREDNI |
+| 6 | Optymalizacja chunkowania i renderowania | `core/systems/chunk.ts`, `renderer.ts` | 2 dni | WYSOKI |
+| 7 | Więcej tipów i dialogów NPC | `game/constants.ts`, `core/systems/entity.ts` | 1 dzień | NISKI |
+| 8 | Przygotowanie pod NETWORK SDK | `services/network/NetworkSDK.ts` | 2 dni | WYSOKI |
 
-#### Task 1 in detail: Resource balancing
+#### Task 1 szczegółowo: Balancing surowców
 
-**Problem:** Players currently start with 200 iron, 150 copper, 150 coal.
-That's too much — it kills progression.
+**Problem:** Obecnie gracz startuje z 200 iron, 150 copper, 150 coal. To za dużo — zabija progres.
 
-**New start:**
+**Nowy start:**
 ```
 inventory: [
   { itemId: 'iron', count: 50 },
@@ -533,8 +523,8 @@ inventory: [
 ]
 ```
 
-**Crafting ratios:**
-| Recipe | Input | Output | Time (ticks) |
+**Proporcje craftingu:**
+| Przepis | Input | Output | Czas (ticki) |
 |---|---|---|---|
 | Iron Plate | 1 iron | 1 iron_plate | 10 |
 | Copper Plate | 1 copper | 1 copper_plate | 10 |
@@ -543,36 +533,36 @@ inventory: [
 | Circuit | 3 iron_plate + 2 copper_plate | 1 circuit | 30 |
 | Ammo | 1 iron_plate | 5 ammo | 5 |
 
-### 5.2 Void — Planet 2 (3D, chill, chat)
+### 5.2 Void — Planeta 2 (3D, chill, czat)
 
-**Status:** 📅 Planned (Phase 3).  
-**Engine:** Three.js r160+.  
-**Directory:** `planets/void/`.  
-**Subdomain:** `void.shdd.network`.
+**Stan:** 📅 Plan (Faza 3).  
+**Silnik:** Three.js r160+.  
+**Katalog:** `planets/void/`.  
+**Subdomena:** `void.shdd.network`.
 
-**Mechanics:**
-- The avatar enters the void
-- Sees other players as colorful figures (box + skin + nickname above the head)
-- Chat above the head + global chat on the left
-- Can sit down (toggle sit), watch the stars
-- Procedural stars (WebGL particle system)
-- Zero goals, zero quests, zero pressure
+**Mechanika:**
+- Awatar wchodzi do pustki
+- Widzi innych graczy jako kolorowe postacie (box + skin + nick nad głową)
+- Czat nad głową + globalny czat po lewej
+- Może usiąść (toggle sit), patrzeć w gwiazdy
+- Gwiazdy proceduralne (particle system WebGL)
+- Zero celów, zero questów, zero presji
 
-**Technical (Three.js):**
+**Technicznie (Three.js):**
 ```
 Scene:
-  - Skybox: procedural (gradient + stars)
-  - Ground: transparent platform (torus or plane with emission)
-  - Avatars: BoxGeometry + MeshStandardMaterial (color from skin)
-  - Nickname: CSS2DRenderer (text above the head)
+  - Skybox: procedural (gradient + gwiazdy)
+  - Ground: przezroczysta platforma (torus lub plane z emission)
+  - Avatars: BoxGeometry + MeshStandardMaterial (kolor z skinu)
+  - Nickname: CSS2DRenderer (tekst nad głową)
   - Chat: HTML overlay (React)
 Networking:
   - Realtime channel: void-{roomId}
-  - Broadcast: pos (10Hz), chat, animations (sit/wave)
+  - Broadcast: pos (10Hz), chat, animacje (sit/wave)
   - Presence: heartbeat 1s, timeout 5s
 ```
 
-**Files:**
+**Pliki:**
 ```
 planets/void/
 ├── index.html
@@ -581,133 +571,130 @@ planets/void/
 │   ├── scene.ts              # skybox, ground, lights
 │   ├── avatar.ts             # Avatar class (mesh + skin + nick)
 │   ├── network.ts            # Realtime sync
-│   ├── chat.ts               # chat HTML overlay
+│   ├── chat.ts               # HTML overlay czatu
 │   └── styles.css
 ├── package.json
 ├── tsconfig.json
-└── wrangler.toml             # deploy to Cloudflare Pages
+└── wrangler.toml             # deploy do Cloudflare Pages
 ```
 
-### 5.3 Arcade — Planet 3 (3D, multiplayer games)
+### 5.3 Arcade — Planeta 3 (3D, gry wieloosobowe)
 
-**Status:** 📅 Planned (Phase 3+).  
-**Engine:** Three.js.  
-**Directory:** `planets/arcade/`.
+**Stan:** 📅 Plan (Faza 3+).  
+**Silnik:** Three.js.  
+**Katalog:** `planets/arcade/`.
 
-**Mechanics:**
-- An arcade interior with cabinets (3D, low poly, neon lights)
-- Each cabinet is a different game (Snake, Pong, Tetris)
-- You walk up, click, play with someone standing at the same cabinet
-- Leaderboard on the wall (free only, zero rewards)
+**Mechanika:**
+- Wnętrze arkady z automatami (3D, niski poly, neonowe światła)
+- Każdy automat to inna gra (Snake, Pong, Tetris)
+- Podchodzisz, klikasz, grasz z kimś kto też stoi przy automacie
+- Leaderboard na ścianie (tylko free, zero nagród)
 
-### 5.4 Atelier — Planet 4 (3D, your corner)
+### 5.4 Atelier — Planeta 4 (3D, twój kąt)
 
-**Status:** 📅 Planned (Phase 3+).  
-**Engine:** Three.js + editor.  
-**Directory:** `planets/atelier/`.
+**Stan:** 📅 Plan (Faza 3+).  
+**Silnik:** Three.js + edytor.  
+**Katalog:** `planets/atelier/`.
 
-**Mechanics:**
-- Every player has a room (one for free)
-- Can decorate it with furniture (box + color)
-- Invites friends
-- The room is saved in R2 as JSON
-- Additional rooms = hosting (50 PLN / month)
+**Mechanika:**
+- Każdy gracz ma pokój (jeden za free)
+- Może go udekorować meblami (box + kolor)
+- Zaprasza znajomych
+- Pokój jest zapisywany w R2 jako JSON
+- Dodatkowe pokoje = hosting (50 PLN / mies.)
 
 ---
 
-## 6. MONETIZATION — FULL MODEL
+## 6. MONETYZACJA — PEŁEN MODEL
 
-### 6.1 Principles
+### 6.1 Zasady
 
-1. **Zero lockouts.** Every game feature is available for free. Premium doesn't unlock mechanics.
-2. **You buy because you want to, not because you have to.** Founder Pack,
-   Supporter Badge, skins — these are all "I want to support and get something nice".
-3. **Price matches sentimental value.** Unique skins cost 100 PLN not because
-   that's what they cost to produce, but because nobody else will have the same one.
-4. **No monthly subscription.** 2 months is the sweet spot: you buy and forget.
-5. **No FOMO pressure.** "Buy now because it disappears in an hour" — no.
-   "This skin exists in a single copy, you can have it" — yes.
+1. **Zero blokad.** Każda funkcjonalność gry jest dostępna za free. Premium nie odblokowuje mechanik.
+2. **Kupujesz bo chcesz, nie bo musisz.** Founder Pack, Supporter Badge, skiny — to wszystko są "chcę wesprzeć i dostać coś fajnego".
+3. **Cena adekwatna do wartości sentymentalnej.** Skiny unikatowe kosztują 100 PLN nie dlatego że tyle kosztuje wyprodukowanie, tylko dlatego że nikt inny nie będzie miał takiego samego.
+4. **Brak subskrypcji miesięcznej.** 2 miesiące to sweet spot: kupujesz i zapominasz.
+5. **Brak FOMO presji.** "Kup teraz bo za godzinę zniknie" — nie. "Ten skin istnieje w jednym egzemplarzu, możesz go mieć" — tak.
 
-### 6.2 Founder Pack — 49 PLN (one-time)
+### 6.2 Founder Pack — 49 PLN (jednorazowo)
 
-**What it includes:**
+**Co zawiera:**
 
-| Element | Where visible | Implementation |
+| Element | Gdzie widoczny | Implementacja |
 |---|---|---|
-| Custom "Founder" title | Profile, chat, hover over avatar | D1: `premium_tier = 'founder'` in profiles |
-| Golden avatar frame | All planets, avatar rendering | `avatar_data.borderColor = '#FFD700'` |
-| Credits on the `/credits` page | Public page | D1: founders list |
-| "Pioneer" achievement | Profile, statistics | D1: `achievements` tab |
+| Custom title "Founder" | Profil, czat, hover nad awatarem | D1: `premium_tier = 'founder'` w profiles |
+| Złota ramka awatara | Wszystkie planety, renderowanie avatara | `avatar_data.borderColor = '#FFD700'` |
+| Credits na stronie `/credits` | Strona publiczna | D1: lista founderów |
+| Achievement "Pioneer" | Profil, statystyki | D1: `achievements` tab |
 
-**Purchase flow:**
+**Flow zakupu:**
 ```
-1. Player clicks "Buy Founder Pack" in ShopMenu
+1. Gracz klika "Kup Founder Pack" w ShopMenu
 2. POST /v1/payments/create-session { product: 'founder_pack', price: 49 }
-3. Stripe creates a Checkout Session → returns URL
-4. Player pays on Stripe
+3. Stripe tworzy Checkout Session → zwraca URL
+4. Gracz płaci na Stripe
 5. Webhook `checkout.session.completed` → Worker:
-   a. Updates profiles.premium_tier = 'founder'
-   b. Inserts a record into D1 payments
-   c. Adds the 'pioneer' achievement
-6. Frontend refreshes the profile after returning from Stripe
+   a. Aktualizuje profiles.premium_tier = 'founder'
+   b. Wstawia wpis do D1 payments
+   c. Dodaje achievement 'pioneer'
+6. Frontend po powrocie ze Stripe odświeża profil
 ```
 
-### 6.3 Supporter Badge — 7 PLN / 2 months
+### 6.3 Supporter Badge — 7 PLN / 2 miesiące
 
-**What it includes:**
+**Co zawiera:**
 
-| Element | Where visible | Implementation |
+| Element | Gdzie widoczny | Implementacja |
 |---|---|---|
-| Pink name in chat | `ChatPanel.tsx` | `chat message color = member.premium_tier === 'supporter' ? '#f472b6' : 'white'` |
-| "Supporter" icon | Chat, profile, above avatar | `BadgeData { type: 'supporter_7pln', iconUrl }` |
-| Early access to planets | Beta of new worlds | Feature flag in profile |
+| Różowe imię w czacie | `ChatPanel.tsx` | `chat message color = member.premium_tier === 'supporter' ? '#f472b6' : 'white'` |
+| Ikonka "Supporter" | Czat, profil, nad awatarem | `BadgeData { type: 'supporter_7pln', iconUrl }` |
+| Wczesny dostęp do planet | Beta nowych światów | Feature flag w profilu |
 
-**Purchase flow:**
+**Flow zakupu:**
 ```
-1. Stripe Billing: creates a Subscription (every 2 months)
-2. Webhook `invoice.paid` → Worker extends the badge
-3. Webhook `customer.subscription.deleted` → Worker revokes the badge
+1. Stripe Billing: tworzy Subscription (co 2 miesiące)
+2. Webhook `invoice.paid` → Worker przedłuża badge
+3. Webhook `customer.subscription.deleted` → Worker cofa badge
 ```
 
-### 6.4 Unique skins — 100 PLN each
+### 6.4 Skiny unikatowe — 100 PLN za sztukę
 
-[Detailed specification in section 7]
+[Szczegółowa specyfikacja w sekcji 7]
 
-### 6.5 World hosting (Atelier) — 50 PLN / month
+### 6.5 Hosting światów (Atelier) — 50 PLN / miesiąc
 
-| Element | Free | For 50 PLN/mo |
+| Element | Za free | Za 50 PLN/mies. |
 |---|---|---|
-| Atelier room | 1 | 5 |
-| Inviting friends | Yes | Yes |
-| Custom room name | - | Yes |
-| Uploading your own assets | - | Yes |
-| Exporting the room to JSON | - | Yes |
+| Pokój w Atelier | 1 | 5 |
+| Zapraszanie znajomych | Tak | Tak |
+| Custom name pokoju | - | Tak |
+| Upload własnych assetów | - | Tak |
+| Eksport pokoju do JSON | - | Tak |
 
-**Flow:** Monthly Stripe Subscription, webhook manages hosting_subscriptions in D1.
+**Flow:** Stripe Subscription co miesiąc, webhook zarządza hosting_subscriptions w D1.
 
-### 6.6 Financial forecast
+### 6.6 Prognoza finansowa
 
-| Month | Users | Founder (5%) | Supporter (3%) | Skins (1%) | Hosting (0.5%) | Revenue |
+| Miesiąc | Użytkownicy | Founder (5%) | Supporter (3%) | Skiny (1%) | Hosting (0.5%) | Przychód |
 |---|---|---|---|---|---|---|
 | 1 | 100 | 5 × 49 = 245 | 3 × 3.5 = 10.5 | 1 × 100 = 100 | 0 | ~355 PLN |
 | 3 | 500 | 25 × 49 = 1225 | 15 × 3.5 = 52.5 | 5 × 100 = 500 | 2 × 50 = 100 | ~1877 PLN |
 | 6 | 2000 | 100 × 49 = 4900 | 60 × 3.5 = 210 | 20 × 100 = 2000 | 10 × 50 = 500 | ~7610 PLN |
 | 12 | 10000 | 500 × 49 = 24500 | 300 × 3.5 = 1050 | 100 × 100 = 10000 | 50 × 50 = 2500 | ~38050 PLN |
 
-**Fixed costs:** ~50 PLN / mo. (Supabase Nano $15 + domains ~10 PLN + the rest free).
+**Koszty stałe:** ~50 PLN / mies. (Supabase Nano $15 + domeny ~10 PLN + reszta free).
 
 ---
 
-## 7. UNIQUE SKIN SYSTEM
+## 7. SYSTEM SKINÓW UNIKATOWYCH
 
-### 7.1 Skin generator
+### 7.1 Generator skinów
 
 #### `services/cosmetics/SkinGenerator.ts`
 
 ```typescript
 interface PatternConfig {
-  primaryColor: string;      // base color
-  secondaryColor: string;    // accent color
+  primaryColor: string;      // kolor bazowy
+  secondaryColor: string;    // kolor akcentu
   pattern: string;           // 'stripes' | 'dots' | 'flame' | 'geometric' | 'pixel' | 'wave'
   effect: string;            // 'glow' | 'sparkle' | 'pulse' | 'none'
 }
@@ -715,12 +702,12 @@ interface PatternConfig {
 interface GeneratedSkin {
   id: string;                // UUID
   patternData: PatternConfig;
-  hash: string;              // SHA256 of JSON.stringify(patternData)
-  previewUrl: string;        // R2 URL to PNG
+  hash: string;              // SHA256 z JSON.stringify(patternData)
+  previewUrl: string;        // R2 URL do PNG
 }
 
 function generateSkin(seed: string): GeneratedSkin {
-  // Deterministic from the seed (e.g. userId + day)
+  // Deterministicznie z seeda (np. userId + day)
   const hash = sha256(seed);
   const primaries = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'];
   const secondaries = ['#2C3E50', '#34495E', '#1A1A2E', '#16213E', '#0F3460', '#533483', '#E94560', '#F5A623', '#7B1FA2', '#00695C'];
@@ -741,46 +728,46 @@ function generateSkin(seed: string): GeneratedSkin {
 }
 ```
 
-#### Skin-generating events
+#### Zdarzenia generujące skin
 
-| Event | When | Trigger | Notes |
+| Zdarzenie | Kiedy | Trigger | Uwagi |
 |---|---|---|---|
-| **Achievement** | Player earns the "100h", "1000 buildings" etc. achievements | `applyResearchEffects` / `checkAchievements` | Skin for hard work |
-| **Account birthday** | Registration anniversary | Cron worker (checks daily) | Skin for loyalty |
-| **Raffle** | The system draws every N ticks | `updateWorld` (0.1% chance per tick) | Skin by surprise |
-| **Purchase** | Player buys for 100 PLN | Stripe webhook | Intentional skin |
+| **Achievement** | Gracz zdobywa achievement "100h", "1000 buildings" itp. | `applyResearchEffects` / `checkAchievements` | Skin za ciężką pracę |
+| **Urodziny konta** | Rocznica rejestracji | Cron worker (sprawdza codziennie) | Skin za lojalność |
+| **Raffle** | System losuje co N ticków | `updateWorld` (szansa 0.1% na tick) | Skin z zaskoczenia |
+| **Purchase** | Gracz kupuje za 100 PLN | Webhook Stripe | Skin celowy |
 
-### 7.2 Distribution
+### 7.2 Dystrybucja
 
-When a skin is generated for a player:
-
-```
-1. The system creates a record in D1: skins { id, owner_id = null, hash, source, price: 100, expires_at: now+30d }
-2. A notification appears on screen: "✨ A new unique skin is waiting for you!"
-3. The player has 30 days to buy it (price: 100 PLN via Stripe)
-4. If they buy → owner_id = userId, is_purchased = 1, expires_at = NULL
-5. If they don't buy within 30 days → the skin disappears, the hash returns to the pool (may go to someone else)
-6. After purchase: the skin is visible on the avatar in ALL planets
-```
-
-### 7.3 Secondary market
-
-A player who bought a skin can sell it:
+Kiedy skin zostaje wygenerowany dla gracza:
 
 ```
-1. The player lists the skin on the marketplace
-2. Price: any (min 50 PLN, max 500 PLN)
-3. NETWORK takes a 5% commission
-4. The buyer pays → the skin changes owner_id
-5. The skin's ownership history is visible (blockchain-like, but on D1)
+1. System tworzy rekord w D1: skins { id, owner_id = null, hash, source, price: 100, expires_at: now+30d }
+2. Na ekranie pojawia się powiadomienie: "✨ Nowy unikatowy skin czeka na Ciebie!"
+3. Gracz ma 30 dni na zakup (cena: 100 PLN przez Stripe)
+4. Jeśli kupi → owner_id = userId, is_purchased = 1, expires_at = NULL
+5. Jeśli nie kupi w 30 dni → skin znika, hash wraca do puli (może trafić do kogoś innego)
+6. Po zakupie: skin jest widoczny na awatarze we WSZYSTKICH planetach
 ```
 
-### 7.4 Rendering the skin on the avatar
+### 7.3 Rynek secondary
 
-In Novactorio (2D):
+Gracz który kupił skin może go sprzedać:
+
+```
+1. Gracz wystawia skin na marketplace
+2. Cena: dowolna (min 50 PLN, max 500 PLN)
+3. NETWORK bierze 5% prowizji
+4. Kupujący płaci → skin zmienia owner_id
+5. Historia własności skinu jest widoczna (blockchain-like, ale na D1)
+```
+
+### 7.4 Renderowanie skinu na awatarze
+
+W Novactorio (2D):
 ```typescript
 function renderAvatar(ctx: CanvasRenderingContext2D, skin: SkinData, x: number, y: number) {
-  // Draw the character with the skin's colors and pattern
+  // Rysuj postać z kolorami i wzorem z skinu
   ctx.fillStyle = skin.patternData.primaryColor;
   ctx.fillRect(x, y, 16, 16); // body
   ctx.fillStyle = skin.patternData.secondaryColor;
@@ -792,7 +779,7 @@ function renderAvatar(ctx: CanvasRenderingContext2D, skin: SkinData, x: number, 
 }
 ```
 
-In Void (3D, Three.js):
+W Void (3D, Three.js):
 ```typescript
 function createAvatarMesh(skin: SkinData): THREE.Mesh {
   const geo = new THREE.BoxGeometry(0.8, 1.6, 0.8);
@@ -809,7 +796,7 @@ function createAvatarMesh(skin: SkinData): THREE.Mesh {
 
 ---
 
-## 8. PAYMENT SYSTEM (STRIPE)
+## 8. SYSTEM PŁATNOŚCI (STRIPE)
 
 ### 8.1 Worker: `stripe-webhook.ts`
 
@@ -827,15 +814,15 @@ async function handleStripeWebhook(request: Request, env: Env): Promise<Response
     case 'checkout.session.completed': {
       const session = event.data.object;
       const { userId, product } = session.metadata;
-      const amount = session.amount_total / 100; // from cents to PLN
+      const amount = session.amount_total / 100; // z groszy na PLN
 
-      // Save in D1
+      // Zapisz w D1
       await env.DB.prepare(`
         INSERT INTO payments (id, user_id, username, stripe_session_id, amount, product, status)
         VALUES (?, ?, ?, ?, ?, ?, 'completed')
       `).bind(uuid(), userId, session.metadata.username, session.id, amount, product).run();
 
-      // Grant the product
+      // Przyznaj produkt
       switch (product) {
         case 'founder_pack':
           await grantFounderPack(userId, env);
@@ -879,10 +866,10 @@ class PaymentService {
 }
 ```
 
-### 8.3 ShopMenu.tsx — extension
+### 8.3 ShopMenu.tsx — rozszerzenie
 
 ```typescript
-// In ShopMenu, new sections:
+// W ShopMenu, nowe sekcje:
 function ShopFounderPack() {
   const buy = async () => {
     await PaymentService.redirectToStripe('founder_pack', 49, {
@@ -893,13 +880,13 @@ function ShopFounderPack() {
   return (
     <div className="p-4 border border-yellow-500/30 rounded-xl">
       <h3 className="font-orbitron text-yellow-400">👑 Founder Pack — 49 PLN</h3>
-      <p className="text-white/50 text-xs mt-1">One-time. Forever. Because you believe in this vision.</p>
+      <p className="text-white/50 text-xs mt-1">Jednorazowo. Na zawsze. Bo wierzysz w tę wizję.</p>
       {!isFounder ? (
         <button onClick={buy} className="mt-3 px-4 py-2 bg-yellow-600/20 text-yellow-400 rounded-lg">
-          BUY NOW
+          KUP TERAZ
         </button>
       ) : (
-        <div className="mt-3 text-green-400 text-xs">✅ You already have the Founder Pack. Thank you.</div>
+        <div className="mt-3 text-green-400 text-xs">✅ Masz już Founder Pack. Dziękujemy.</div>
       )}
     </div>
   );
@@ -908,52 +895,52 @@ function ShopFounderPack() {
 
 ---
 
-## 9. IMPLEMENTATION PHASES — DEPENDENCY TASKS
+## 9. FAZY IMPLEMENTACJI — TASKI ZALEŻNOŚCIOWE
 
-### 9.1 Dependency map
+### 9.1 Mapa zależności
 
 ```
-Phase 0 (✅)
-  └── AuthService + bugfixes + lobby MVP
+Faza 0 (✅)
+  └── AuthService + bugfixy + lobby MVP
        │
-Phase 1: Monetization
-  ├── 1.1 Stripe webhook Worker (blocker for everything)
-  ├── 1.2 D1 payments table + migration
-  ├── 1.3 Founder Pack (shop UI + granting)
+Faza 1: Monetyzacja
+  ├── 1.1 Stripe webhook Worker (blocker dla wszystkiego)
+  ├── 1.2 D1 payments table + migracja
+  ├── 1.3 Founder Pack (shop UI + przyznawanie)
   ├── 1.4 Supporter Badge (Stripe subscription + UI)
-  ├── 1.5 Skin generator + D1 skins table (blocker for 1.6)
-  ├── 1.6 Unique skins (purchase + assignment + rendering)
-  ├── 1.7 Secondary skin market
-  ├── 1.8 World hosting (Stripe sub + Atelier integration)
-  └── 1.9 User profile (/profile page)
+  ├── 1.5 Skin generator + D1 skins table (blocker dla 1.6)
+  ├── 1.6 Skiny unikatowe (zakup + przypisanie + renderowanie)
+  ├── 1.7 Rynek secondary skinów
+  ├── 1.8 Hosting światów (Stripe sub + Atelier integracja)
+  └── 1.9 Profil użytkownika (strona /profile)
        │
-Phase 2: Novactorio Polish
+Faza 2: Novactorio Polish
   ├── 2.1 Balancing
-  ├── 2.2 Tutorial
+  ├── 2.2 Samouczek
   ├── 2.3 Sound design
-  ├── 2.4 UI/UX fixes
-  └── 2.5 Optimization
+  ├── 2.4 UI/UX poprawki
+  └── 2.5 Optymalizacja
        │
-Phase 3: 3D planets
-  ├── 3.1 NETWORK SDK (shared auth/lobby/chat for planets)
-  ├── 3.2 Void (Three.js scaffold + avatars + chat)
-  ├── 3.3 Arcade (multiplayer games)
-  └── 3.4 Atelier (room editor)
+Faza 3: Planety 3D
+  ├── 3.1 NETWORK SDK (uwspólnienie auth/lobby/chat dla planet)
+  ├── 3.2 Void (Three.js scaffold + avatary + czat)
+  ├── 3.3 Arcade (gry wieloosobowe)
+  └── 3.4 Atelier (edytor pokoju)
        │
-Phase 4: UGC + SDK
-  └── 4.1 Public SDK + documentation + examples
+Faza 4: UGC + SDK
+  └── 4.1 SDK publiczny + dokumentacja + przykłady
 ```
 
-### 9.2 Phase 1 — tasks in detail
+### 9.2 Faza 1 — Taski szczegółowo
 
 #### Task 1.1: Stripe webhook Worker
 
-**Files:**
+**Pliki:**
 - `src/workers/stripe-webhook.ts` — Cloudflare Worker
 - `src/services/payment/PaymentService.ts` — frontend service
-- `supabase/migrations/20260521_stripe.sql` — D1 table (manually on Cloudflare)
+- `supabase/migrations/20260521_stripe.sql` — D1 table (ręcznie na Cloudflare)
 
-**Code `stripe-webhook.ts`:**
+**Kod `stripe-webhook.ts`:**
 ```typescript
 import { Stripe } from 'stripe';
 import { Env } from './env';
@@ -1024,16 +1011,16 @@ async function grantFounder(userId: string, env: Env) {
 ```
 
 **Deploy:** `wrangler deploy src/workers/stripe-webhook.ts --name stripe-webhook`
-**Stripe dashboard:** Add endpoint URL → `https://api.shdd.network/v1/payments/webhook`
+**Stripe dashboard:** Dodaj endpoint URL → `https://api.shdd.network/v1/payments/webhook`
 
 #### Task 1.2: D1 payments table
 
-**Command:**
+**Komenda:**
 ```bash
 wrangler d1 execute shdd-network --file=supabase/migrations/20260521_d1_payments.sql
 ```
 
-**File `supabase/migrations/20260521_d1_payments.sql`:**
+**Plik `supabase/migrations/20260521_d1_payments.sql`:**
 ```sql
 CREATE TABLE IF NOT EXISTS payments (
   id TEXT PRIMARY KEY,
@@ -1087,7 +1074,7 @@ CREATE TABLE IF NOT EXISTS founder_credits (
 
 #### Task 1.3: Founder Pack UI
 
-**File `src/components/FounderPack.tsx` — new component:**
+**Plik `src/components/FounderPack.tsx` — nowy komponent:**
 ```typescript
 interface Props {
   isFounder: boolean;
@@ -1101,10 +1088,10 @@ export default function FounderPack({ isFounder, onPurchase }: Props) {
         <span>👑</span> FOUNDER PACK
       </h3>
       <div className="mt-2 text-xs text-white/60 space-y-1">
-        <p>✨ Golden avatar frame in all worlds</p>
-        <p>🏆 "Founder" title in the profile and chat</p>
-        <p>📜 Your name in the project credits</p>
-        <p className="text-yellow-400/80 font-bold mt-2">49 PLN · one-time</p>
+        <p>✨ Złota ramka awatara we wszystkich światach</p>
+        <p>🏆 Tytuł "Founder" w profilu i na czacie</p>
+        <p>📜 Nazwisko w creditsach projektu</p>
+        <p className="text-yellow-400/80 font-bold mt-2">49 PLN · jednorazowo</p>
       </div>
       {!isFounder ? (
         <button
@@ -1112,11 +1099,11 @@ export default function FounderPack({ isFounder, onPurchase }: Props) {
           className="mt-3 w-full py-2 rounded-lg font-orbitron text-sm font-bold transition-all"
           style={{ background: 'rgba(255,215,0,0.15)', color: '#FFD700', border: '1px solid rgba(255,215,0,0.3)' }}
         >
-          BUY NOW
+          KUP TERAZ
         </button>
       ) : (
         <div className="mt-3 py-2 text-center text-green-400 text-xs font-orbitron">
-          ✅ You are a Founder. Thank you for being with us from the start.
+          ✅ Jesteś Founderm. Dziękujemy, że jesteś z nami od początku.
         </div>
       )}
     </div>
@@ -1124,16 +1111,16 @@ export default function FounderPack({ isFounder, onPurchase }: Props) {
 }
 ```
 
-**Modification to `ShopMenu.tsx`:**
+**Modyfikacja `ShopMenu.tsx`:**
 ```diff
 + import FounderPack from './FounderPack';
-// ... in render:
+// ... w render:
 + <FounderPack isFounder={currentUserPremiumTier === 'founder'} onPurchase={handleBuyFounder} />
 ```
 
 #### Task 1.4: Supporter Badge
 
-**Modification to `ChatPanel.tsx`:** name color depends on `premium_tier`.
+**Modyfikacja `ChatPanel.tsx`:** kolor imienia zależy od `premium_tier`.
 
 ```typescript
 const nameColor = {
@@ -1145,39 +1132,39 @@ const nameColor = {
 
 #### Task 1.5: Skin Generator
 
-**File `src/services/cosmetics/SkinGenerator.ts`:**
-[Skin generator as in section 7.1]
+**Plik `src/services/cosmetics/SkinGenerator.ts`:**
+[Skin generator jak w sekcji 7.1]
 
-**File `src/workers/skin-generator.ts` — cron (daily):**
+**Plik `src/workers/skin-generator.ts` — cron (codziennie):**
 ```typescript
 export default {
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    // Daily: check if someone deserves a skin
-    // 1. Account birthdays
+    // Codziennie: sprawdź czy ktoś zasługuje na skin
+    // 1. Urodziny konta
     const birthdays = await getBirthdayUsers(env);
     for (const user of birthdays) {
       const skin = generateSkin(`birthday-${user.id}-${new Date().toISOString().split('T')[0]}`);
       await saveSkin(env, skin, 'birthday', user.id);
-      await notifyUser(user.id, '🎂 You received a unique birthday skin!');
+      await notifyUser(user.id, '🎂 Otrzymałeś unikatowy skin urodzinowy!');
     }
-    // 2. Raffle (0.1% chance for each active user)
+    // 2. Raffle (0.1% szansy dla każdego aktywnego usera)
     const activeUsers = await getActiveUsers(env);
     for (const user of activeUsers) {
       if (Math.random() < 0.001) {
         const skin = generateSkin(`raffle-${user.id}-${Date.now()}`);
         await saveSkin(env, skin, 'raffle', user.id);
-        await notifyUser(user.id, '✨ The system chose you! You have a unique skin to claim.');
+        await notifyUser(user.id, '✨ System wybrał Ciebie! Masz unikatowy skin do odbioru.');
       }
     }
-    // 3. Expired skins
+    // 3. Wygaśnięte skiny
     await expireUnclaimedSkins(env);
   },
 };
 ```
 
-#### Task 1.6: Skins — purchase and rendering
+#### Task 1.6: Skiny — zakup i renderowanie
 
-**File `src/services/cosmetics/SkinService.ts`:**
+**Plik `src/services/cosmetics/SkinService.ts`:**
 ```typescript
 class SkinService {
   static async getMySkins(userId: string): Promise<{ owned: SkinData[]; reserved: SkinData[] }> {
@@ -1191,7 +1178,7 @@ class SkinService {
   }
 
   static async purchaseSkin(skinId: string): Promise<string> {
-    // Creates a Stripe session, returns the URL
+    // Tworzy Stripe session, zwraca URL
     const { data } = await supabase.functions.invoke('stripe-create-session', {
       body: { product: 'unique_skin', price: 100, metadata: { skinId } },
     });
@@ -1200,33 +1187,33 @@ class SkinService {
 }
 ```
 
-### 9.3 Dependency tasks — graph
+### 9.3 Taski zależnościowe — graf
 
 ```
-1.1 Stripe Worker ──→ 1.3 Founder Pack ──→ 1.9 Profile
+1.1 Stripe Worker ──→ 1.3 Founder Pack ──→ 1.9 Profil
 ├───────────────────→ 1.4 Supporter Badge
-└──→ 1.2 D1 tables ──→ 1.5 Skin Generator ──→ 1.6 Skin Purchase ──→ 1.7 Market
-                                          └──→ 1.6 Rendering
+└──→ 1.2 D1 tables ──→ 1.5 Skin Generator ──→ 1.6 Skiny Purchase ──→ 1.7 Rynek
+                                          └──→ 1.6 Renderowanie
                     ──→ 1.8 Hosting
 ```
 
-**Critical path:** 1.1 → 1.2 → 1.5 → 1.6 → 1.7 → 1.9
-**Fastest cashflow:** 1.1 + 1.2 + 1.3 = **~2 days to first revenue.**
+**Krytyczna ścieżka (critical path):** 1.1 → 1.2 → 1.5 → 1.6 → 1.7 → 1.9
+**Najszybszy cashflow:** 1.1 + 1.2 + 1.3 = **~2 dni do pierwszego przychodu.**
 
 ---
 
-## 10. FILES — MANIFEST OF ALL FILES
+## 10. PLIKI — MANIFEST WSZYSTKICH PLIKÓW
 
-### 10.1 New files (Phase 1)
+### 10.1 Nowe pliki (Faza 1)
 
 #### Workers (Cloudflare)
 
 ```
 src/workers/
-├── stripe-webhook.ts          # Stripe webhook handler ~150 lines
-├── stripe-create-session.ts   # Creates Checkout Session ~80 lines
-├── skin-generator.ts          # Cron: generates skins daily ~100 lines
-└── marketplace.ts             # Secondary skin market ~120 lines
+├── stripe-webhook.ts          # Stripe webhook handler ~150 linii
+├── stripe-create-session.ts   # Tworzy Checkout Session ~80 linii
+├── skin-generator.ts          # Cron: generuje skiny codziennie ~100 linii
+└── marketplace.ts             # Rynek secondary skinów ~120 linii
 ```
 
 #### Services
@@ -1234,34 +1221,34 @@ src/workers/
 ```
 src/services/
 ├── payment/
-│   ├── PaymentService.ts      # Frontend: createSession, redirectToStripe ~50 lines
-│   └── StripeWebhookHandler.ts # Product-granting logic ~200 lines
+│   ├── PaymentService.ts      # Frontend: createSession, redirectToStripe ~50 linii
+│   └── StripeWebhookHandler.ts # Logika przyznawania produktów ~200 linii
 ├── cosmetics/
-│   ├── SkinGenerator.ts        # Algorithmic generator ~100 lines
-│   ├── SkinService.ts          # Skin CRUD ~150 lines
-│   └── SkinRenderer.ts         # Rendering on Canvas/Three.js ~80 lines
+│   ├── SkinGenerator.ts        # Generator algorytmiczny ~100 linii
+│   ├── SkinService.ts          # CRUD skinów ~150 linii
+│   └── SkinRenderer.ts         # Renderowanie na Canvas/Three.js ~80 linii
 ├── profile/
-│   ├── ProfileService.ts       # GET/PATCH profile ~100 lines
-│   └── CreditsService.ts       # Founders list ~50 lines
+│   ├── ProfileService.ts       # GET/PATCH profilu ~100 linii
+│   └── CreditsService.ts       # Lista founderów ~50 linii
 └── network/
-    └── NetworkSDK.ts           # SDK for planets (auth, lobby, chat) ~200 lines
+    └── NetworkSDK.ts           # SDK dla planet (auth, lobby, chat) ~200 linii
 ```
 
-#### React components
+#### Komponenty React
 
 ```
 src/components/
-├── FounderPack.tsx             # Founder Pack UI ~80 lines
-├── SupporterBadge.tsx          # Badge UI ~40 lines
-├── SkinPreview.tsx             # Skin preview ~60 lines
-├── SkinShop.tsx                # Skin purchase ~100 lines
-├── Marketplace.tsx             # Secondary market ~150 lines
-├── Profile.tsx                 # Profile page ~200 lines
-├── CreditsPage.tsx             # Founders list ~50 lines
-└── HostingManagement.tsx       # Hosting management ~100 lines
+├── FounderPack.tsx             # Founder Pack UI ~80 linii
+├── SupporterBadge.tsx          # Badge UI ~40 linii
+├── SkinPreview.tsx             # Podgląd skinu ~60 linii
+├── SkinShop.tsx                # Zakup skinu ~100 linii
+├── Marketplace.tsx             # Rynek secondary ~150 linii
+├── Profile.tsx                 # Strona profilu ~200 linii
+├── CreditsPage.tsx             # Lista founderów ~50 linii
+└── HostingManagement.tsx       # Zarządzanie hostingiem ~100 linii
 ```
 
-#### Migrations
+#### Migracje
 
 ```
 supabase/migrations/
@@ -1273,96 +1260,96 @@ supabase/functions/
     └── deno.json
 ```
 
-### 10.2 Modified files
+### 10.2 Modyfikowane pliki
 
 ```
-src/App.tsx                     # Routing to /profile, /credits
-src/components/ShopMenu.tsx     # Founder Pack, Supporter, Skins sections
-src/components/ChatPanel.tsx    # Name color by premium_tier
-src/services/auth/AuthService.ts # getPremiumTier() method
-src/game/constants.ts           # New achievements
-src/core/systems/achievements.ts # More achievements
-src/game/engine.ts              # Skin initialization
-src/components/HUD.tsx          # Premium indicator
-src/components/GameCanvas.tsx   # Skin rendering on the avatar
+src/App.tsx                     # Routing do /profile, /credits
+src/components/ShopMenu.tsx     # Sekcje Founder Pack, Supporter, Skiny
+src/components/ChatPanel.tsx    # Kolor imienia wg premium_tier
+src/services/auth/AuthService.ts # Metoda getPremiumTier()
+src/game/constants.ts           # Nowe achievementy
+src/core/systems/achievements.ts # Więcej achievementów
+src/game/engine.ts              # Inicjalizacja skinów
+src/components/HUD.tsx          # Wskaźnik premium
+src/components/GameCanvas.tsx   # Renderowanie skinu na awatarze
 ```
 
-### 10.3 Planet plans (Phase 3+)
+### 10.3 Plany planet (Faza 3+)
 
 ```
 planets/
 ├── void/
 │   ├── index.html
 │   ├── src/
-│   │   ├── main.ts             # Init Three.js ~100 lines
-│   │   ├── scene.ts             # Scene + skybox ~150 lines
-│   │   ├── avatar.ts            # Avatar class ~120 lines
-│   │   ├── network.ts           # Realtime sync ~100 lines
-│   │   └── chat.ts              # Chat overlay ~80 lines
+│   │   ├── main.ts             # Init Three.js ~100 linii
+│   │   ├── scene.ts             # Scena + skybox ~150 linii
+│   │   ├── avatar.ts            # Klasa awatara ~120 linii
+│   │   ├── network.ts           # Realtime sync ~100 linii
+│   │   └── chat.ts              # Overlay czatu ~80 linii
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── wrangler.toml
 ├── arcade/
-│   └── ... (analogous)
+│   └── ... (analogicznie)
 └── atelier/
-    └── ... (analogous)
+    └── ... (analogicznie)
 ```
 
 ---
 
-## 11. SUCCESS METRICS
+## 11. MIARY SUKCESU
 
-### 11.1 Technical
+### 11.1 Techniczne
 
-| Metric | Goal | Tool |
+| Metryka | Cel | Narzędzie |
 |---|---|---|
-| Zero TS errors | `tsc --noEmit` = 0 errors | CI/CD |
-| Game load time | < 3s on a good connection | Lighthouse |
-| FPS in Novactorio | 60 FPS on mid-range hardware | DevTools Performance |
-| Realtime latency | < 100ms (position sync) | Realtime measurement |
-| API response time | < 200ms (95th percentile) | Cloudflare Analytics |
+| Zero błędów TS | `tsc --noEmit` = 0 errors | CI/CD |
+| Czas ładowania gry | < 3s na dobrym łączu | Lighthouse |
+| FPS w Novactorio | 60 FPS na średnim sprzęcie | DevTools Performance |
+| Realtime latency | < 100ms (position sync) | Pomiar Realtime |
+| API response time | < 200ms (95 percentyl) | Cloudflare Analytics |
 | Uptime | 99.9% | Cloudflare Status |
 
-### 11.2 Business
+### 11.2 Biznesowe
 
-| Metric | M1 | M3 | M6 | M12 |
+| Metryka | M1 | M3 | M6 | M12 |
 |---|---|---|---|---|
-| Registered users | 100 | 500 | 2000 | 10000 |
+| Zarejestrowani | 100 | 500 | 2000 | 10000 |
 | DAU (daily active) | 20 | 100 | 400 | 2000 |
-| Founder Packs sold | 5 | 25 | 100 | 500 |
-| Supporter Badges (active) | 3 | 15 | 60 | 300 |
-| Unique skins sold | 1 | 5 | 20 | 100 |
-| Active hosting | 0 | 2 | 10 | 50 |
-| Monthly revenue (PLN) | ~350 | ~1880 | ~7600 | ~38000 |
+| Founder Pack sprzedanych | 5 | 25 | 100 | 500 |
+| Supporter Badge (active) | 3 | 15 | 60 | 300 |
+| Skiny unikatowe sprzedane | 1 | 5 | 20 | 100 |
+| Hostingi aktywne | 0 | 2 | 10 | 50 |
+| Przychód miesięczny (PLN) | ~350 | ~1880 | ~7600 | ~38000 |
 
-### 11.3 Community
+### 11.3 Społecznościowe
 
-| Metric | M1 | M3 | M6 | M12 |
+| Metryka | M1 | M3 | M6 | M12 |
 |---|---|---|---|---|
-| Chat users per day | 5 | 30 | 150 | 500 |
-| Lobbies created (total) | 50 | 500 | 3000 | 15000 |
-| Shared blueprints | - | 50 | 500 | 3000 |
-| 3D planets launched | 0 | 1 (Void) | 2 (Void+Arcade) | 3+Atelier |
+| Użytkownicy na czacie dziennie | 5 | 30 | 150 | 500 |
+| Lobby utworzone (łącznie) | 50 | 500 | 3000 | 15000 |
+| Blueprinty udostępnione | - | 50 | 500 | 3000 |
+| Planety 3D uruchomione | 0 | 1 (Void) | 2 (Void+Arcade) | 3+Atelier |
 
 ---
 
-## 12. GLOSSARY
+## 12. SŁOWNIK POJĘĆ
 
-| Term | Definition |
+| Pojęcie | Definicja |
 |---|---|
-| **SHDD NETWORK** | Platform of worlds (OASIS-like). One account, many planets. |
-| **Planet** | A separate application/game within NETWORK. Each has its own engine, subdomain, and experience. |
-| **Novactorio** | The first planet — 2D factory builder. The main child. |
-| **Void** | The second planet — 3D chill/chat. Zero gameplay, only atmosphere. |
-| **Arcade** | The third planet — 3D arcade with multiplayer games. |
-| **Atelier** | The fourth planet — 3D your corner, room editor. |
-| **NETWORK SDK** | Toolkit for planet creators: auth, lobby, friends, chat. |
-| **Founder Pack** | One-time purchase (49 PLN). Proof of supporting the vision. |
-| **Supporter Badge** | Subscription (7 PLN / 2 mo). Pink name, icon. |
-| **Unique skin** | Algorithmically generated cosmetic. Exists in 1 copy across the whole NETWORK. |
-| **Senior Update** | Phase 0 of the project — bugfixes, refactor, lobby MVP. Completed. |
+| **SHDD NETWORK** | Platforma światów (OASIS-like). Jedno konto, wiele planet. |
+| **Planeta** | Osobna aplikacja/game w ramach NETWORK. Każda ma własny silnik, subdomenę i doświadczenie. |
+| **Novactorio** | Pierwsza planeta — 2D factory builder. Główne dziecko. |
+| **Void** | Druga planeta — 3D chill/czat. Zero gry, tylko atmosfera. |
+| **Arcade** | Trzecia planeta — 3D arkada z grami wieloosobowymi. |
+| **Atelier** | Czwarta planeta — 3D twój kąt, edytor pokoi. |
+| **NETWORK SDK** | Zestaw narzędzi dla twórców planet: auth, lobby, znajomi, chat. |
+| **Founder Pack** | Jednorazowy zakup (49 PLN). Dowód wsparcia wizji. |
+| **Supporter Badge** | Subskrypcja (7 PLN / 2 mies.). Różowe imię, ikonka. |
+| **Skin unikatowy** | Kosmetyk generowany algorytmicznie. Istnieje w 1 egzemplarzu w całym NETWORKU. |
+| **Senior Update** | Faza 0 projektu — bugfixy, refaktor, lobby MVP. Zakończona. |
 
 ---
 
-*SHDD NETWORK — from player to player. Zero ratings, zero hate, zero corporations.*  
-*Because everyone deserves a place where they can be themselves.*
+*SHDD NETWORK — od gracza dla gracza. Zero ocen, zero hejtu, zero korpo.*  
+*Bo każdy zasługuje na miejsce gdzie może być sobą.*
