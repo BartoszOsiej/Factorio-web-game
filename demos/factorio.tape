@@ -1,4 +1,4 @@
-Output assets/factorio-demo.svg
+Output assets/factorio-demo.gif
 
 Set FontSize 16
 Set Width 960

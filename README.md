@@ -21,7 +21,7 @@ from scratch in TypeScript with its own Canvas 2D engine.**
 
 
 
-![Factorio Web Demo](assets/factorio-demo.svg)
+![Factorio Web Demo](assets/factorio-demo.gif)
 
 
 
