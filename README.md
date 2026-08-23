@@ -13,6 +13,19 @@ from scratch in TypeScript with its own Canvas 2D engine.**
 
 </div>
 
+## 🎮 Demo
+
+
+
+<!-- VHS auto-rendered — run: vhs demos/factorio.tape -->
+
+
+
+![Factorio Web Demo](assets/factorio-demo.svg)
+
+
+
+
 ## Highlights
 
 | Feature | Description |
