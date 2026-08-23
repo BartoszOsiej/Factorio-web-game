@@ -21,19 +21,31 @@ Set Theme {
 Type "npm install -g novactorio"
 Enter
 Sleep 1s
-
-Type "novactorio --help"
+Type "added 38 packages in 1.8s"
 Enter
-Sleep 800ms
+Sleep 400ms
+
+Type "novactorio --version"
+Enter
+Sleep 400ms
+Type "novactorio v0.0.0 (browser factory)"
+Enter
+Sleep 600ms
 
 Type "novactorio serve --port 3000"
 Enter
 Sleep 1s
-
-Type "# Browser-based factory automation"
+Type "   ✓ Canvas 2D engine loaded"
+Enter
+Type "   ✓ Game server: http://localhost:3000"
+Enter
+Type "   ✓ Players can join with room code"
 Enter
 Sleep 500ms
 
+Type "# Browser-based factory automation"
+Enter
+Sleep 400ms
 Type "# Canvas 2D engine · TypeScript · co-op multiplayer"
 Enter
-Sleep 1s
+Sleep 800ms
