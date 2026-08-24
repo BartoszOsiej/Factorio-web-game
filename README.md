@@ -7,6 +7,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript)
 ![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react)
 [![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/BartoszOsiej/Factorio-web-game/badge)](https://securityscorecards.dev/viewer/?uri=github.com/BartoszOsiej/Factorio-web-game)
 
 **A browser-based factory automation game (inspired by Factorio) — written
 from scratch in TypeScript with its own Canvas 2D engine.**
