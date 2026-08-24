@@ -2,15 +2,19 @@ name: publish-github-npm
 
 on:
   push:
+    permissions:
+      packages: write
     tags: ["v*"]
   workflow_dispatch:
+    permissions:
+      packages: write
 
-permissions:
-  contents: read
-  packages: write
+permissions: read-all
 
 jobs:
   publish:
+    permissions:
+      packages: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
