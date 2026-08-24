@@ -6,7 +6,9 @@ on:
     branches: [main]
   schedule:
     - cron: "0 12 * * 3"
-permissions: read-all
+permissions:
+  contents: read
+  security-events: write
 jobs:
   analyze:
     name: Analyze
